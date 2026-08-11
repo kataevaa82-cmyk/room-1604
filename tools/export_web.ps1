@@ -1,0 +1,112 @@
+# Сборка веб-версии для Яндекс Игр.
+#
+# Зачем отдельный шаг вместо html/head_include в export_presets.cfg: в Godot
+# этот параметр НЕ применяется при экспорте из командной строки — плейсхолдер
+# $GODOT_HEAD_INCLUDE остаётся в шаблоне необработанным, и работает опция
+# только при экспорте из редактора. Вся наша сборка идёт через CLI, поэтому
+# содержимое <head> вставляется здесь, после экспорта.
+#
+# Так даже лучше проверяемо: тег SDK остаётся статическим в самом index.html,
+# и его наличие подтверждается поиском по файлу, а не «должно сработать».
+
+[CmdletBinding()]
+param(
+    [string]$GodotPath = "",
+    [string]$OutputDir = "build/web"
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+
+if ([string]::IsNullOrWhiteSpace($GodotPath)) {
+    $command = Get-Command godot_console.exe -ErrorAction SilentlyContinue
+    if ($null -eq $command) { $command = Get-Command godot.exe -ErrorAction SilentlyContinue }
+    if ($null -eq $command) { throw "Godot was not found. Pass -GodotPath." }
+    $GodotPath = $command.Source
+}
+
+$outDir = [IO.Path]::GetFullPath((Join-Path $projectRoot $OutputDir))
+if (-not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
+$indexPath = Join-Path $outDir "index.html"
+
+Write-Host "Exporting web build: $indexPath"
+& $GodotPath --headless --path $projectRoot --export-release "Web" $indexPath
+if ($LASTEXITCODE -ne 0) { throw "Godot web export failed with exit code $LASTEXITCODE." }
+if (-not (Test-Path -LiteralPath $indexPath)) { throw "Web export produced no index.html." }
+
+# Содержимое <head>.
+#
+#  * Тег SDK Яндекса по относительному пути /sdk.js — рекомендованный вариант
+#    для игр, залитых на хостинг площадки (а не через свой домен).
+#  * initSDK объявлен ДО тега: скрипт грузится async и зовёт функцию по onload,
+#    поэтому она обязана уже существовать.
+#  * __ysdkReady взводится в ОБОИХ исходах, и при успехе и при ошибке: игра
+#    ждёт любого ответа, а не только удачного, и не висит, если SDK не отдался
+#    (например, когда игру открыли не на Яндексе).
+#  * Правила страницы под требования площадки к мобильным: нет прокрутки, нет
+#    подтягивания для обновления, нет выделения текста и контекстного меню по
+#    долгому нажатию.
+#
+# Остальная логика моста живёт в scripts/systems/Platform.gd.
+$marker = "<!-- room1604:head -->"
+$headInclude = @"
+$marker
+<script>window.__ysdk=null;window.__ysdkReady=false;function initSDK(){try{YaGames.init().then(function(s){window.__ysdk=s;window.__ysdkReady=true;}).catch(function(){window.__ysdkReady=true;});}catch(e){window.__ysdkReady=true;}}</script>
+<script src="/sdk.js" async onload="initSDK()"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:#000;
+-webkit-user-select:none;-moz-user-select:none;user-select:none;
+-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+canvas{display:block;touch-action:none;outline:none;-webkit-touch-callout:none}
+</style>
+"@
+
+$html = [IO.File]::ReadAllText($indexPath)
+if ($html.Contains($marker)) {
+    Write-Host "Head include already present, skipping."
+} else {
+    if (-not $html.Contains("</head>")) { throw "index.html has no </head> to inject into." }
+    $html = $html.Replace("</head>", $headInclude + "`n</head>")
+    # Без BOM: Godot и браузеры читают его как мусорные символы в начале файла,
+    # а Set-Content в PowerShell 5.1 добавляет BOM по умолчанию.
+    [IO.File]::WriteAllText($indexPath, $html, (New-Object Text.UTF8Encoding($false)))
+    Write-Host "Head include injected."
+}
+
+# Проверяем результат, а не надеемся на него.
+$check = [IO.File]::ReadAllText($indexPath)
+$required = @(
+    '<script src="/sdk.js" async onload="initSDK()"></script>',
+    'function initSDK',
+    'overscroll-behavior:none',
+    'viewport-fit=cover'
+)
+foreach ($needle in $required) {
+    if (-not $check.Contains($needle)) { throw "index.html is missing required head content: $needle" }
+}
+# initSDK обязан быть объявлен раньше тега, который его зовёт по onload.
+if ($check.IndexOf('function initSDK') -gt $check.IndexOf('src="/sdk.js"')) {
+    throw "initSDK is declared after the SDK script tag; onload would fire before it exists."
+}
+Write-Host "Head content: OK"
+
+# Требования площадки к архиву: не больше 100 МБ в разархивированном виде,
+# index.html в корне, без пробелов и кириллицы в именах файлов.
+$files = Get-ChildItem -LiteralPath $outDir -File
+$totalMb = [math]::Round((($files | Measure-Object -Property Length -Sum).Sum / 1MB), 2)
+Write-Host ("Unzipped size: {0} MB (Yandex limit: 100 MB)" -f $totalMb)
+if ($totalMb -gt 100) { throw "Build exceeds the 100 MB Yandex limit: $totalMb MB" }
+
+foreach ($file in $files) {
+    if ($file.Name -match '[^\x20-\x7E]') { throw "Non-ASCII character in a shipped file name: $($file.Name)" }
+    if ($file.Name.Contains(' ')) { throw "Space in a shipped file name: $($file.Name)" }
+}
+Write-Host "File names: OK (ASCII, no spaces)"
+
+if (-not (Test-Path -LiteralPath $indexPath)) { throw "index.html missing from the archive root." }
+Write-Host "Web build ready: $outDir"
+$files | Select-Object Name, @{ N = "MB"; E = { [math]::Round($_.Length / 1MB, 2) } } |
+    Sort-Object MB -Descending | Format-Table -AutoSize
