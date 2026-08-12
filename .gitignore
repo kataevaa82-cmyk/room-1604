@@ -6,6 +6,9 @@
 # в 100 МБ на файл, и в репозиторий он не поедет в принципе.
 # Веб-сборка лежит отдельно в docs/ — оттуда её отдаёт GitHub Pages.
 build/
+# Godot sees the generated web icons as source images when docs/ is scanned.
+# Their import sidecars are build noise and must not be committed.
+docs/*.import
 
 # Кадры проверок: регенерируются прогонами SHELL_SHOT и *_WALKTHROUGH,
 # а весят 33 МБ.

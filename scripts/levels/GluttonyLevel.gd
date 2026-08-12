@@ -395,6 +395,7 @@ func run_audit() -> void:
 			["tray_minibar", "minibar"], ["tray_minibar", "living_mirror"],
 			["tray_floor_hall", "entry_rug"]]): return
 	if not check_reachable(reach_origins()): return
+	if not check_actions_bound(TRAYS.keys() + ["door"]): return
 	if not require(message_on_screen(), "message sits off screen"): return
 	if not require(act == Act.CARRY, "circle III did not start in the carry act"): return
 	if not require(current_goal().contains("Вынеси"), "H says nothing useful in act I"): return

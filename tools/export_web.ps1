@@ -61,6 +61,20 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;overscroll-b
 -webkit-user-select:none;-moz-user-select:none;user-select:none;
 -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 canvas{display:block;touch-action:none;outline:none;-webkit-touch-callout:none}
+/* room1604:loader — экран ожидания.
+   Первая загрузка тянет около четырнадцати мегабайт (шаблон Godot плюс
+   ресурсы), и на медленном канале это минуты. Серый прямоугольник Godot с
+   системным индикатором всё это время выглядит как зависшая страница, поэтому
+   он перекрашен под меню игры: те же цвета, та же надпись сверху. Правится
+   только внешний вид, сам индикатор остаётся штатным. */
+#status{background-color:#0b0a09!important}
+#status-progress{bottom:13%;width:38%;height:6px;border:0;-webkit-appearance:none;appearance:none;
+background:#241f18;border-radius:3px;overflow:hidden}
+#status-progress::-webkit-progress-bar{background:#241f18}
+#status-progress::-webkit-progress-value{background:#e8c07d}
+#status-progress::-moz-progress-bar{background:#e8c07d}
+#status::after{content:"КОМНАТА 1604  ·  ШЕСТНАДЦАТЫЙ ЭТАЖ";position:absolute;bottom:8%;left:0;right:0;
+text-align:center;font:13px/1.4 'Noto Sans','Segoe UI',Arial,sans-serif;letter-spacing:.18em;color:#9f8e73}
 </style>
 "@
 
@@ -82,7 +96,8 @@ $required = @(
     '<script src="/sdk.js" async onload="initSDK()"></script>',
     'function initSDK',
     'overscroll-behavior:none',
-    'viewport-fit=cover'
+    'viewport-fit=cover',
+    'room1604:loader'
 )
 foreach ($needle in $required) {
     if (-not $check.Contains($needle)) { throw "index.html is missing required head content: $needle" }

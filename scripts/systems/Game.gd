@@ -22,6 +22,8 @@ extends Node
 
 const FIRST_CIRCLE := 1
 const LAST_CIRCLE := 9
+const MENU_SCENE := "res://menu.tscn"
+const GAME_SCENE := "res://main.tscn"
 
 # Круг, который соберётся при следующей загрузке сцены.
 # 0 — «не задано»: значит, круг берётся из окружения или первый по умолчанию.
@@ -31,13 +33,16 @@ var circle_to_load := 0
 enum Boot { MENU, PLAY }
 var boot_intent := Boot.MENU
 
-# Решается один раз на старте, ДО сборки круга: комнату собирают процедурно и
-# целиком, и собрать сначала первый круг, а потом по кнопке «Продолжить»
-# перезагрузиться в седьмой — значит построить всю комнату дважды подряд.
-# Поэтому уже на старте берём тот круг, который игрок вероятнее всего и
-# выберет, а меню показываем поверх него.
+# Решается один раз на старте, до перехода из лёгкой сцены меню в main.tscn.
+# Комната больше не строится под меню: выбранный круг загружается только после
+# нажатия кнопки игроком.
 func prepare_boot() -> void:
-	if is_audit() or not has_screen() or OS.has_environment("LIMBO_CIRCLE"):
+	# FLOW_AUDIT перечислен здесь, а не в is_audit(): разбирает его main.gd, то
+	# есть игровая сцена, и до неё надо дойти. Без этой строки проверка
+	# прогресса упиралась в меню и висела там до убийства процесса — молча, ни
+	# строчки в вывод, будто её и не запускали.
+	if is_audit() or not has_screen() or OS.has_environment("LIMBO_CIRCLE") \
+			or OS.has_environment("SHELL_SHOT") or OS.has_environment("FLOW_AUDIT"):
 		boot_intent = Boot.PLAY
 		return
 	if circle_to_load == 0:
@@ -46,14 +51,18 @@ func prepare_boot() -> void:
 func should_show_menu() -> bool:
 	return boot_intent == Boot.MENU and not is_audit() and has_screen()
 
-# Уйти в меню: перезагружаем сцену, чтобы круг начался с чистой комнаты.
+# Уйти в отдельную сцену меню. Она не содержит и не отрисовывает 3D-комнату.
 func go_to_menu(tree: SceneTree) -> void:
 	boot_intent = Boot.MENU
 	circle_to_load = current_circle
 	tree.paused = false
-	tree.reload_current_scene()
+	# Scene changes requested from a Button.pressed callback must be deferred.
+	# Otherwise the menu can be freed while Godot is still dispatching the
+	# signal; on HTML5 this occasionally leaves the old menu visible and makes
+	# the button look unresponsive.
+	tree.change_scene_to_file.call_deferred(MENU_SCENE)
 
-# Пойти играть указанный круг с чистой комнаты.
+# Пойти в игровую сцену и собрать указанный круг с чистой комнаты.
 func go_to_circle(tree: SceneTree, circle: int) -> void:
 	if not is_valid_circle(circle):
 		return
@@ -61,7 +70,10 @@ func go_to_circle(tree: SceneTree, circle: int) -> void:
 	circle_to_load = circle
 	remember_circle(circle)
 	tree.paused = false
-	tree.reload_current_scene()
+	# The call originates from a menu button signal. Defer it until the current
+	# GUI event has finished so the menu can be released cleanly on desktop and
+	# in the browser export alike.
+	tree.change_scene_to_file.call_deferred(GAME_SCENE)
 
 const SAVE_PATH_DEFAULT := "user://progress.cfg"
 # Путь — переменная, а не константа, только ради проверки прогресса: она обязана
@@ -69,18 +81,10 @@ const SAVE_PATH_DEFAULT := "user://progress.cfg"
 var save_path := SAVE_PATH_DEFAULT
 const SAVE_VERSION := 1
 
-# Фоновая дорожка. Живёт на автозагрузке, а не в сцене, ровно по одной причине:
-# круги переключаются перезагрузкой сцены, и фон, лежащий в сцене, обрывался бы
-# на каждом переходе и начинался заново.
-#
-# Громкость намеренно очень низкая. Процедурные сигналы в этом проекте однажды
-# уже выключили за то, что звучали дёшево (CueAudio.enabled = false); фон имеет
-# право быть только на грани слышимости, иначе он повторит ту же ошибку.
-const AMBIENCE_STREAM := preload("res://assets/audio/room_ambience.mp3")
-const AMBIENCE_DB := -30.0
-
-var ambience: AudioStreamPlayer
-var sound_on := true
+# Звук полностью выключен по решению владельца. Флаг общий, чтобы ни игрок, ни
+# атмосфера коридора не создавали даже беззвучные AudioStreamPlayer и сэмплы.
+const AUDIO_ENABLED := false
+var sound_on := false
 
 # Прогресс игрока. Круг, на котором остановился, и что уже пройдено.
 var current_circle := FIRST_CIRCLE
@@ -101,46 +105,15 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if not is_audit():
 		load_progress()
-		build_ambience()
 		# Облако — поверх локального. Platform поднимается следом за Game и сам
 		# доложит, когда площадка ответит; ждать его никто не обязан.
 		if has_node("/root/Platform"):
 			cloud = get_node("/root/Platform")
 
-# ------------------------------------------------------------------- фон ---
-
-func build_ambience() -> void:
-	# В headless-прогоне звуковой сервер есть, но играть некому и незачем: тот
-	# же признак, которым player.gd решает, строить ли шаги.
-	if not has_screen():
-		return
-	# Копия потока, а не сам ресурс: loop правится на экземпляре, и общий
-	# импортированный ресурс остаётся нетронутым.
-	var stream := AMBIENCE_STREAM.duplicate() as AudioStreamMP3
-	stream.loop = true
-	ambience = AudioStreamPlayer.new()
-	ambience.name = "Ambience"
-	ambience.stream = stream
-	ambience.volume_db = AMBIENCE_DB
-	# Играет и на паузе: в меню и на экране перехода фон должен продолжаться,
-	# иначе пауза звучит как обрыв.
-	ambience.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(ambience)
-	apply_sound()
-
-func apply_sound() -> void:
-	if not ambience:
-		return
-	if sound_on and not ambience.playing:
-		ambience.play()
-	elif not sound_on and ambience.playing:
-		ambience.stop()
-
 func set_sound(enabled: bool) -> void:
 	if sound_on == enabled:
 		return
 	sound_on = enabled
-	apply_sound()
 	save_progress()
 
 # ---------------------------------------------------------------- прогресс ---
@@ -284,6 +257,10 @@ func is_valid_circle(number: int) -> bool:
 # Идёт ли прогон аудита. Любой режимный флаг круга означает, что игрока нет и
 # показывать ему нечего: ни меню, ни экрана перехода.
 func is_audit() -> bool:
+	# FLOW_AUDIT сюда НЕ входит намеренно: save_progress() молчит на аудитах,
+	# чтобы не затирать сохранение живого игрока, а проверке прогресса нужно
+	# именно настоящее сохранение на диск (у неё для этого свой save_path).
+	# Мимо меню её проводит prepare_boot(), а не этот список.
 	for name_of_mode in ["LIMBO_AUDIT", "LIMBO_EXPORT_AUDIT", "LUST_AUDIT", "GLUT_AUDIT",
 			"GREED_AUDIT", "WRATH_AUDIT", "HERESY_AUDIT", "VIOL_AUDIT", "FRAUD_AUDIT",
 			"TREACH_AUDIT", "ROOM1408_MODEL_AUDIT", "ROOM1408_STATS", "ROOM1408_NAV_AUDIT",

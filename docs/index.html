@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>Room 1604 — Лимб</title>
+		<title>Комната 1604</title>
 		<style>
 html, body, #canvas {
 	margin: 0;
@@ -102,6 +102,20 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;overscroll-b
 -webkit-user-select:none;-moz-user-select:none;user-select:none;
 -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 canvas{display:block;touch-action:none;outline:none;-webkit-touch-callout:none}
+/* room1604:loader вЂ” СЌРєСЂР°РЅ РѕР¶РёРґР°РЅРёСЏ.
+   РџРµСЂРІР°СЏ Р·Р°РіСЂСѓР·РєР° С‚СЏРЅРµС‚ РѕРєРѕР»Рѕ С‡РµС‚С‹СЂРЅР°РґС†Р°С‚Рё РјРµРіР°Р±Р°Р№С‚ (С€Р°Р±Р»РѕРЅ Godot РїР»СЋСЃ
+   СЂРµСЃСѓСЂСЃС‹), Рё РЅР° РјРµРґР»РµРЅРЅРѕРј РєР°РЅР°Р»Рµ СЌС‚Рѕ РјРёРЅСѓС‚С‹. РЎРµСЂС‹Р№ РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє Godot СЃ
+   СЃРёСЃС‚РµРјРЅС‹Рј РёРЅРґРёРєР°С‚РѕСЂРѕРј РІСЃС‘ СЌС‚Рѕ РІСЂРµРјСЏ РІС‹РіР»СЏРґРёС‚ РєР°Рє Р·Р°РІРёСЃС€Р°СЏ СЃС‚СЂР°РЅРёС†Р°, РїРѕСЌС‚РѕРјСѓ
+   РѕРЅ РїРµСЂРµРєСЂР°С€РµРЅ РїРѕРґ РјРµРЅСЋ РёРіСЂС‹: С‚Рµ Р¶Рµ С†РІРµС‚Р°, С‚Р° Р¶Рµ РЅР°РґРїРёСЃСЊ СЃРІРµСЂС…Сѓ. РџСЂР°РІРёС‚СЃСЏ
+   С‚РѕР»СЊРєРѕ РІРЅРµС€РЅРёР№ РІРёРґ, СЃР°Рј РёРЅРґРёРєР°С‚РѕСЂ РѕСЃС‚Р°С‘С‚СЃСЏ С€С‚Р°С‚РЅС‹Рј. */
+#status{background-color:#0b0a09!important}
+#status-progress{bottom:13%;width:38%;height:6px;border:0;-webkit-appearance:none;appearance:none;
+background:#241f18;border-radius:3px;overflow:hidden}
+#status-progress::-webkit-progress-bar{background:#241f18}
+#status-progress::-webkit-progress-value{background:#e8c07d}
+#status-progress::-moz-progress-bar{background:#e8c07d}
+#status::after{content:"РљРћРњРќРђРўРђ 1604  В·  РЁР•РЎРўРќРђР”Р¦РђРўР«Р™ Р­РўРђР–";position:absolute;bottom:8%;left:0;right:0;
+text-align:center;font:13px/1.4 'Noto Sans','Segoe UI',Arial,sans-serif;letter-spacing:.18em;color:#9f8e73}
 </style>
 </head>
 	<body>
@@ -121,7 +135,7 @@ canvas{display:block;touch-action:none;outline:none;-webkit-touch-callout:none}
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":9632736,"index.wasm":39513091},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":4137488,"index.wasm":39513091},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 

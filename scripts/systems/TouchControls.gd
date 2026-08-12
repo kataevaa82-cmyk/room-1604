@@ -130,6 +130,13 @@ func build_buttons() -> void:
 	pause.pressed.connect(func() -> void: send_key(KEY_ESCAPE))
 	root.add_child(pause)
 
+	var map := make_touch_button("КАРТА", Vector2(88, 64))
+	map.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	map.position = Vector2(-264, 20)
+	map.add_theme_font_size_override("font_size", 16)
+	map.pressed.connect(func() -> void: send_key(KEY_M))
+	root.add_child(map)
+
 	# Слоты инвентаря. Нужны в кругах III и IV, где предметы носят в руках.
 	var slots := HBoxContainer.new()
 	slots.add_theme_constant_override("separation", 8)

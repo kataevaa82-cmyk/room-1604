@@ -1,6 +1,6 @@
 [application]
-config/name="Room 1604 — Лимб"
-run/main_scene="res://main.tscn"
+config/name="Комната 1604"
+run/main_scene="res://menu.tscn"
 
 [autoload]
 ; Единственный узел, переживающий перезагрузку сцены: он помнит, какой круг

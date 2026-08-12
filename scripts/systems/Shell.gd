@@ -15,18 +15,25 @@ extends CanvasLayer
 # не убирают.
 
 const LAYER := 20
+const LEVEL_MAP_SCRIPT := preload("res://scripts/systems/LevelMap.gd")
 
 # Названия кругов для экранов. Порядковый номер римскими — как в документах.
+#
+# Третья колонка — строка-приманка, которую видно на переходе между кругами.
+# Она намеренно говорит гостиничным языком и ни разу не называет ад: игрок
+# заселился в обычный номер и до последней минуты не должен знать, куда попал.
+# Названия кругов при этом настоящие — единственная подсказка, и пусть она
+# останется единственной.
 const CIRCLES := {
-	1: ["I", "ЛИМБ", "Комната просыпается"],
-	2: ["II", "УРАГАН", "Комната не унимается"],
-	3: ["III", "НЕНАСЫТНОСТЬ", "Комната переполнена"],
-	4: ["IV", "СКУПОСТЬ", "Комната в долгах"],
-	5: ["V", "ГНЕВ", "Комната после ссоры"],
-	6: ["VI", "ЕРЕСЬ", "Комната заперта изнутри"],
-	7: ["VII", "НАСИЛИЕ", "Комната сжала кулак"],
-	8: ["VIII", "ОБМАН", "Комната притворяется"],
-	9: ["IX", "ПРЕДАТЕЛЬСТВО", "Комната выстыла"]
+	1: ["I", "ЛИМБ", "Ключ подошёл. Дверь закрылась сама"],
+	2: ["II", "УРАГАН", "Накрыто на двоих. Вы заселялись один"],
+	3: ["III", "НЕНАСЫТНОСТЬ", "Ужин, которого никто не заказывал"],
+	4: ["IV", "СКУПОСТЬ", "Кто-то считал деньги и не досчитал"],
+	5: ["V", "ГНЕВ", "Здесь только что кричали"],
+	6: ["VI", "ЕРЕСЬ", "Всё заперто. Изнутри"],
+	7: ["VII", "НАСИЛИЕ", "Кто-то держался за это до последнего"],
+	8: ["VIII", "ОБМАН", "Ни одна вещь не та, за которую себя выдаёт"],
+	9: ["IX", "ПРЕДАТЕЛЬСТВО", "Номер выстывает. Отопление ни при чём"]
 }
 
 const CREAM := Color("ddd6c8")
@@ -42,7 +49,7 @@ const TRANSITION_SECONDS := 4.6
 # «КРУГ III ПРОЙДЕН», не успев прочитать.
 const TRANSITION_MIN_READ := 1.8
 
-enum Screen { NONE, MENU, CIRCLES_LIST, PAUSE, TRANSITION, FINALE }
+enum Screen { NONE, MENU, CIRCLES_LIST, PAUSE, MAP, TRANSITION, FINALE }
 
 var screen := Screen.NONE
 var root: Control
@@ -51,6 +58,8 @@ var title: Label
 var subtitle: Label
 var buttons: VBoxContainer
 var footer: Label
+var eyebrow: Label
+var divider: ColorRect
 
 # Обратный отсчёт до следующего круга. Ноль и меньше — не идёт.
 var countdown := 0.0
@@ -71,6 +80,7 @@ var circle := 1
 # касается, и разметка строки подсказок остаётся нетронутой (на ней держится
 # message_on_screen() во всех девяти аудитах).
 var hud: CanvasLayer
+var map_return_to_pause := false
 
 func setup(circle_number: int, circle_hud: CanvasLayer = null) -> void:
 	name = "Shell"
@@ -121,6 +131,37 @@ func build() -> void:
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(backdrop)
 
+	# A restrained hotel-lobby backdrop: warm light near the title, cool falloff
+	# at the edges and barely visible wall panels. It is procedural, so the web
+	# build gains no texture and the menu remains sharp at every size.
+	var atmosphere := ColorRect.new()
+	atmosphere.name = 'Atmosphere'
+	atmosphere.color = Color.WHITE
+	atmosphere.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	atmosphere.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var atmosphere_shader := Shader.new()
+	atmosphere_shader.code = 'shader_type canvas_item; float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);} void fragment(){vec2 p=UV-vec2(.5); float warm=exp(-dot(p+vec2(.03,.13),p+vec2(.03,.13))*8.0); float edge=smoothstep(.72,.22,length(p*vec2(1.0,.76))); float panels=(.5+.5*cos(UV.x*62.8319))*.012; float grain=(h(floor(UV*vec2(420.0,240.0)))-.5)*.010; vec3 ink=vec3(.012,.017,.026)+warm*vec3(.055,.031,.012)+edge*vec3(.008,.009,.010)+panels+grain; COLOR=vec4(ink,.62);}'
+	var atmosphere_material := ShaderMaterial.new()
+	atmosphere_material.shader = atmosphere_shader
+	atmosphere.material = atmosphere_material
+	root.add_child(atmosphere)
+
+	# A thin framed field keeps the shell coherent without becoming a heavy,
+	# opaque dialog. Full-rect anchors keep it safe on phones.
+	var card := Panel.new()
+	card.name = 'MenuFrame'
+	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	card.offset_left = 22.0; card.offset_top = 18.0
+	card.offset_right = -22.0; card.offset_bottom = -18.0
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var card_style := StyleBoxFlat.new()
+	card_style.bg_color = Color(0.018,0.021,0.028,.58)
+	card_style.border_color = Color('55462f')
+	card_style.set_border_width_all(1)
+	card_style.set_corner_radius_all(10)
+	card.add_theme_stylebox_override('panel',card_style)
+	root.add_child(card)
+
 	var column := VBoxContainer.new()
 	column.name = "Column"
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -129,10 +170,25 @@ func build() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(column)
 
+	eyebrow = make_label('ОТЕЛЬ  ·  16-Й ЭТАЖ',13,Color('9f8e73'))
+	eyebrow.add_theme_constant_override('outline_size',3)
+	column.add_child(eyebrow)
+	divider = ColorRect.new()
+	divider.color = Color('765d38')
+	divider.custom_minimum_size = Vector2(150,1)
+	divider.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(divider)
+
 	title = make_label("", 46, AMBER)
 	column.add_child(title)
 	subtitle = make_label("", 21, DIM)
 	column.add_child(subtitle)
+	title.add_theme_constant_override('outline_size',6)
+	title.add_theme_color_override('font_outline_color',Color(0.025,0.018,0.012,.95))
+	title.add_theme_constant_override('font_spacing_glyph',2)
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtitle.custom_minimum_size.x = 420
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 18)
@@ -168,14 +224,32 @@ func make_label(text: String, size: int, color: Color) -> Label:
 
 # Кнопки крупные намеренно: этой же оболочкой пользуются с телефона пальцем,
 # а не мышью. Меньше 44 пикселей по высоте на сенсоре не попасть.
+func button_style(background: Color, border: Color, border_width := 1) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 22.0
+	style.content_margin_right = 22.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	return style
+
 func make_button(text: String, enabled := true) -> Button:
 	var button := Button.new()
+	button.add_theme_stylebox_override('normal',button_style(Color(0.035,0.040,0.052,.92),Color('423a30')))
+	button.add_theme_stylebox_override('hover',button_style(Color(0.105,0.080,0.048,.96),Color('c09659'),2))
+	button.add_theme_stylebox_override('pressed',button_style(Color(0.135,0.094,0.048,.98),Color('e8c07d'),2))
+	button.add_theme_stylebox_override('focus',button_style(Color(0.070,0.061,0.050,.96),Color('d0a664'),2))
+	button.add_theme_stylebox_override('disabled',button_style(Color(0.025,0.027,0.032,.74),Color('302d29')))
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	button.text = text
 	button.custom_minimum_size = Vector2(360, 52)
 	# custom_minimum_size задаёт минимум, а не максимум: без сжатия по центру
 	# кнопка растягивается во всю ширину экрана и выглядит полосой.
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	button.focus_mode = Control.FOCUS_NONE
+	button.focus_mode = Control.FOCUS_ALL
 	button.add_theme_font_size_override("font_size", 20)
 	button.add_theme_color_override("font_color", CREAM if enabled else Color(.45, .43, .40))
 	button.add_theme_color_override("font_hover_color", AMBER)
@@ -196,6 +270,7 @@ func hide_all() -> void:
 	screen = Screen.NONE
 	root.visible = false
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	get_viewport().disable_3d = false
 	set_hud_visible(true)
 	get_tree().paused = false
 	capture_mouse(true)
@@ -205,6 +280,14 @@ func hide_all() -> void:
 func open(new_screen: Screen) -> void:
 	screen = new_screen
 	root.visible = true
+	# Dense screens need the vertical room for their 3x3 grid or map. The main
+	# menu keeps the hotel eyebrow and divider as its signature.
+	eyebrow.visible = new_screen not in [Screen.CIRCLES_LIST,Screen.MAP]
+	divider.visible = eyebrow.visible
+	root.modulate.a = 0.0
+	create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS).tween_property(root,'modulate:a',1.0,.18)
+	get_viewport().disable_3d = new_screen == Screen.MAP
+	backdrop.color = Color(0.02, 0.02, 0.03, 0.93)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	set_hud_visible(false)
 	# Любой экран оболочки — это не геймплей: меню, пауза, переход, финал.
@@ -225,7 +308,7 @@ func capture_mouse(playing: bool) -> void:
 func show_main_menu() -> void:
 	open(Screen.MENU)
 	title.text = "КОМНАТА 1604"
-	subtitle.text = "Девять кругов. Одна и та же комната."
+	subtitle.text = "Вы заселились в 16:04.\nЧасы в гостиной с тех пор прошли одну минуту."
 	clear_buttons()
 
 	if Game.has_progress():
@@ -250,18 +333,7 @@ func show_main_menu() -> void:
 	help.pressed.connect(show_controls)
 	buttons.add_child(help)
 
-	buttons.add_child(make_sound_button(show_main_menu))
-
 	footer.text = "Пройдено кругов: %d из %d" % [Game.completed.size(), Game.LAST_CIRCLE]
-
-# Переключатель звука. Настройка сохраняется вместе с прогрессом, поэтому
-# выключенный звук остаётся выключенным и после перезапуска.
-func make_sound_button(refresh: Callable) -> Button:
-	var button := make_button("Звук: %s" % ("вкл" if Game.sound_on else "выкл"))
-	button.pressed.connect(func() -> void:
-		Game.set_sound(not Game.sound_on)
-		refresh.call())
-	return button
 
 func confirm_restart() -> void:
 	open(Screen.MENU)
@@ -281,7 +353,7 @@ func confirm_restart() -> void:
 func show_circle_list() -> void:
 	open(Screen.CIRCLES_LIST)
 	title.text = "ВЫБРАТЬ КРУГ"
-	subtitle.text = "Открыт следующий за последним пройденным."
+	subtitle.text = "Каждый круг — одна минута на настенных часах: 16:04, 16:05, 16:06…"
 	clear_buttons()
 
 	# Девять кнопок в столбик не помещаются на телефоне, поэтому сетка 3×3.
@@ -312,12 +384,12 @@ func show_controls() -> void:
 	title.text = "УПРАВЛЕНИЕ"
 	subtitle.text = "WASD — идти   ·   мышь — смотреть   ·   Shift — быстрее\n" \
 		+ "ЛКМ — рассмотреть   ·   ПКМ — положить   ·   E — тронуть\n" \
-		+ "1–4 — слот инвентаря   ·   H — подсказка   ·   Esc — пауза"
+		+ "1–4 — слот инвентаря   ·   H — подсказка   ·   M — карта   ·   Esc — пауза"
 	clear_buttons()
 	var back := make_button("Назад")
 	back.pressed.connect(show_main_menu)
 	buttons.add_child(back)
-	footer.text = "Умереть и проиграть нельзя. Часы в гостиной — это прогресс."
+	footer.text = "Здесь нельзя погибнуть. Это не значит, что можно уйти."
 
 func show_pause() -> void:
 	open(Screen.PAUSE)
@@ -331,11 +403,41 @@ func show_pause() -> void:
 	var restart := make_button("Начать круг сначала")
 	restart.pressed.connect(func() -> void: start_circle(circle))
 	buttons.add_child(restart)
-	buttons.add_child(make_sound_button(show_pause))
+	var map_button := make_button("Карта этажа")
+	map_button.pressed.connect(show_map)
+	buttons.add_child(map_button)
 	var menu := make_button("В главное меню")
 	menu.pressed.connect(func() -> void: Game.go_to_menu(get_tree()))
 	buttons.add_child(menu)
-	footer.text = "Прогресс по кругам сохраняется сам."
+	footer.text = "Отель сам помнит, где вы остановились."
+
+func show_map() -> void:
+	map_return_to_pause = screen == Screen.PAUSE
+	open(Screen.MAP)
+	# Карта непрозрачна и не нуждается в мире под собой. Это полностью снимает
+	# 3D-рендер на время чтения карты, особенно полезно в браузере и на телефоне.
+	get_viewport().disable_3d = true
+	backdrop.color = Color(0.015, 0.016, 0.020, 1.0)
+	title.text = "ПЛАН 16-ГО ЭТАЖА"
+	subtitle.text = "Знаки отмечают места, которые комната почему-то запомнила."
+	clear_buttons()
+	var level_map := LEVEL_MAP_SCRIPT.new()
+	var player := get_parent().get_node_or_null("Player") as Node3D
+	if player:
+		level_map.set_player_position(player.global_position)
+	buttons.add_child(level_map)
+	var close := make_button("Закрыть карту")
+	close.pressed.connect(close_map)
+	buttons.add_child(close)
+	footer.text = "M или Esc — закрыть карту"
+
+func close_map() -> void:
+	get_viewport().disable_3d = false
+	if map_return_to_pause:
+		map_return_to_pause = false
+		show_pause()
+	else:
+		hide_all()
 
 # --------------------------------------------------------------- переходы ---
 
@@ -433,7 +535,16 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.is_pressed() or event.is_echo():
 		return
-	if (event as InputEventKey).keycode != KEY_ESCAPE:
+	var key := (event as InputEventKey).keycode
+	if key == KEY_M:
+		if screen == Screen.NONE or screen == Screen.PAUSE:
+			get_viewport().set_input_as_handled()
+			show_map()
+		elif screen == Screen.MAP:
+			get_viewport().set_input_as_handled()
+			close_map()
+		return
+	if key != KEY_ESCAPE:
 		return
 	if screen == Screen.TRANSITION or screen == Screen.FINALE:
 		return
@@ -442,3 +553,5 @@ func _input(event: InputEvent) -> void:
 		show_pause()
 	elif screen == Screen.PAUSE:
 		hide_all()
+	elif screen == Screen.MAP:
+		close_map()

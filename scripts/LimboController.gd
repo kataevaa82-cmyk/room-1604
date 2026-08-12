@@ -256,9 +256,9 @@ func build_interaction_zones() -> void:
 	add_zone("tv", Vector3(-1.63, 1.25, 3.15), Vector3(.45, 1.0, 1.4))
 	add_zone("mirror", Vector3(-4.05, 1.72, -.30), Vector3(.38, .95, .85))
 	add_zone("switch_hall", Vector3(-2.05, 1.18, -2.52), Vector3(.48, .58, .40))
-	add_zone("switch_bedroom", Vector3(-1.72, 1.18, -1.45), Vector3(.42, .58, .48))
+	add_zone("switch_bedroom", Vector3(-1.72, 1.18, -1.15), Vector3(.42, .58, .48))
 	add_zone("switch_bathroom", Vector3(-2.03, 1.18, .25), Vector3(.38, .58, .48))
-	add_zone("switch_living", Vector3(4.08, 1.18, 1.05), Vector3(.42, .58, .48))
+	add_zone("switch_living", Vector3(.18, 1.18, .90), Vector3(.42, .58, .40))
 
 func build_ui() -> void:
 	var layer := CanvasLayer.new(); layer.name = "LimboUI"; add_child(layer)
@@ -893,8 +893,8 @@ func assert_interaction_visibility() -> void:
 		"phone":Vector3(2.61,1.40,-2.0), "pillow":Vector3(1.85,1.45,.05),
 		"card":Vector3(3.48,1.35,1.85), "tv":Vector3(-.45,1.45,3.15),
 		"mirror":Vector3(-3.15,1.55,-.30), "switch_hall":Vector3(-2.05,1.45,-1.82),
-		"switch_bedroom":Vector3(-.95,1.45,-1.45), "switch_bathroom":Vector3(-2.75,1.45,.25),
-		"switch_living":Vector3(3.35,1.45,1.05)
+		"switch_bedroom":Vector3(-.95,1.45,-1.15), "switch_bathroom":Vector3(-2.75,1.45,.25),
+		"switch_living":Vector3(.18,1.45,1.55)
 	}
 	var saved_ray_transform := interaction_ray.transform
 	var saved_target := interaction_ray.target_position

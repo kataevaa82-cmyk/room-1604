@@ -22,7 +22,10 @@ enum Act { PROLOGUE, INTRO, WATCHING, RESTORE, LEAVING, COMPLETE }
 # заводной ключ заводит часы.
 const CORRIDOR_SPAWN := Vector3(1.2, .05, -4.55)
 const CORRIDOR_YAW := 1.93
-const ROOM_THRESHOLD_Z := -3.0
+# The trigger sits safely inside the room, not on the doorway plane. This gives
+# the player enough clearance to pass the moving leaf before its collision is
+# restored and it closes behind them.
+const ROOM_THRESHOLD_Z := -2.55
 
 const RESTORE_IDS := ["chair", "wardrobe", "painting", "phone", "pillow"]
 const TASK_IDS := ["dark", "water", "peephole", "safe"]
@@ -123,6 +126,7 @@ var phone_base_proxy: Node3D
 var wardrobe_proxy: Node3D
 var wardrobe_door: Node3D
 var safe_prop: Node3D
+var safe_light: OmniLight3D
 var door_handle_lever: Node3D
 var exit_darkness: MeshInstance3D
 var containers := {}
@@ -173,6 +177,8 @@ func _ready() -> void:
 		var qa := OS.get_environment("LIMBO_QA")
 		if qa == "safe":
 			code_lock.open()
+		elif qa == "wardrobe_open":
+			use_wardrobe()
 		elif interactor.targets.has(qa):
 			inspect.open(qa, interactor.entry(qa))
 	else:
@@ -305,7 +311,18 @@ func build_props() -> void:
 	Build.box(safe_prop, "SafeBody", Vector3(-1.46, .62, -.15), Vector3(.34, .30, .40), Color("1a1a1c"))
 	Build.box(safe_prop, "SafeDoor", Vector3(-1.28, .62, -.15), Vector3(.03, .26, .36), Color("242427"))
 	var safe_digits := Build.label3d(safe_prop, "SafeDigits", "— — — —", Vector3(-1.26, .62, -.15), Vector3(0, -PI / 2.0, 0), 22, .0016)
-	safe_digits.modulate = Color("6f6a5c")
+	safe_digits.modulate = Color("c7b282")
+	safe_digits.outline_size = 3
+	safe_digits.outline_modulate = Color("17120d")
+	safe_light = OmniLight3D.new()
+	safe_light.name = "SafeInteriorLight"
+	safe_light.position = Vector3(-1.08, .82, -.15)
+	safe_light.light_color = Color("e3be79")
+	safe_light.light_energy = 0.0
+	safe_light.omni_range = 1.35
+	safe_light.omni_attenuation = 1.65
+	safe_light.shadow_enabled = false
+	safe_prop.add_child(safe_light)
 	safe_prop.visible = false
 
 	phone_base_proxy = Node3D.new()
@@ -432,15 +449,17 @@ func register_targets() -> void:
 		"title": "Лампа справа",
 		"text": "Такая же лампа. Цепочка чуть раскачивается.",
 		"usable": true})
-	interactor.register("wall_trace", Vector3(2.25, 1.62, -3.02), Vector3(.8, .5, .2), {
+	# Keep the interaction zone in front of the headboard so the bed collision
+	# cannot intercept the ray before the player reaches the wall inscription.
+	interactor.register("wall_trace", Vector3(2.25, 1.62, -2.72), Vector3(.72, .42, .18), {
 		"title": "Стена у кровати",
 		"text": "Обои в мелкую полоску. Ничего."})
 	for switch_id in ["switch_hall", "switch_bedroom", "switch_bathroom", "switch_living"]:
 		var positions := {
 			"switch_hall": Vector3(-2.05, 1.18, -2.52),
-			"switch_bedroom": Vector3(-1.72, 1.18, -1.45),
+			"switch_bedroom": Vector3(-1.72, 1.18, -1.15),
 			"switch_bathroom": Vector3(-2.03, 1.18, .25),
-			"switch_living": Vector3(4.08, 1.30, 1.05)
+			"switch_living": Vector3(.18, 1.30, .90)
 		}
 		# Зоны выключателей намеренно скромные: прежние были вдвое больше самой
 		# клавиши и перехватывали лучи, идущие к соседней мебели.
@@ -448,7 +467,7 @@ func register_targets() -> void:
 			"switch_hall": Vector3(.34, .38, .28),
 			"switch_bedroom": Vector3(.30, .38, .34),
 			"switch_bathroom": Vector3(.28, .38, .34),
-			"switch_living": Vector3(.30, .38, .34)
+			"switch_living": Vector3(.34, .38, .28)
 		}
 		interactor.register(switch_id, positions[switch_id], sizes[switch_id], {
 			"title": "Выключатель",
@@ -519,7 +538,7 @@ func register_room_objects() -> void:
 		# прихожая
 		"console": [Vector3(-3.92, .50, -1.72), Vector3(.40, .44, .80), "Консоль у входа",
 			"Узкий столик тёмного дерева. Единственный ящик задвинут не до конца.", true],
-		"entry_lamp": [Vector3(-4.02, 1.02, -1.92), Vector3(.34, .44, .34), "Лампа в прихожей",
+		"entry_lamp": [Vector3(-4.02, 1.15, -1.92), Vector3(.40, .78, .40), "Лампа в прихожей",
 			"Латунная стойка, тканевый абажур. Цепочка выключателя качается, хотя сквозняка нет.", true],
 		"hall_plant": [Vector3(-4.00, 1.00, -1.52), Vector3(.30, .40, .30), "Растение",
 			"Мелкие плотные листья. Земля сухая на палец вглубь, но лист не свернулся ни один.", false],
@@ -582,7 +601,7 @@ func register_room_objects() -> void:
 			"Ночной отель. Горит одно окно — шестнадцатый этаж, четвёртое справа.", false],
 		"writing_set": [Vector3(3.70, .84, 1.62), Vector3(.34, .18, .30), "Письменный набор",
 			"Бювар, перо, стопка бумаги. Верхний лист вдавлен чужим почерком.", true],
-		"desk_lamp": [Vector3(4.02, .88, 1.12), Vector3(.26, .26, .26), "Лампа на столе",
+		"desk_lamp": [Vector3(4.02, 1.14, 1.12), Vector3(.40, .78, .40), "Лампа на столе",
 			"Рабочая лампа с зелёным абажуром.", true],
 		"desk_chair": [Vector3(3.28, .50, 1.55), Vector3(.46, .88, .46), "Стул",
 			"Отодвинут от стола ровно настолько, чтобы сесть.", false],
@@ -701,6 +720,9 @@ func on_used(id: String) -> void:
 		"bed_curtain": use_bed_curtain()
 		"lamp_left": toggle_bedside(0)
 		"lamp_right": toggle_bedside(1)
+		"wall_trace":
+			if lights_out:
+				complete_task("dark")
 		"entry_lamp": toggle_extra_lamp(0)
 		"desk_lamp": toggle_extra_lamp(1)
 		"toilet": use_flavor(id, "Бачок ухнул и снова начал набираться. Звука воды при этом нет.")
@@ -751,11 +773,29 @@ func use_corridor(id: String) -> void:
 			hud.show_message("Заперто. Изнутри не отвечают.", 2.6)
 			interactor.set_text(id, "Дверь заперта. Ты стучал — за ней даже не скрипнуло.")
 
+func set_entrance_door_open(open: bool, duration: float = .8) -> void:
+	door_open = open
+	if entrance_collision:
+		entrance_collision.collision_layer = 0 if open else 1
+		entrance_collision.collision_mask = 0 if open else 1
+	var target_rotation := -1.35 if open else 0.0
+	if not entrance_door:
+		return
+	if duration <= 0.0:
+		entrance_door.rotation.y = target_rotation
+	else:
+		create_tween().tween_property(entrance_door, "rotation:y", target_rotation, duration).set_trans(Tween.TRANS_SINE)
+
 func use_room_door() -> void:
 	if act != Act.PROLOGUE:
 		return
 	if door_unlocked:
-		hud.show_message("Дверь открыта. Входи.", 2.2)
+		if door_open:
+			set_entrance_door_open(false)
+			hud.show_message("Дверь закрыта.", 2.2)
+		else:
+			set_entrance_door_open(true)
+			hud.show_message("Дверь открыта. Входи.", 2.2)
 		return
 	if inventory.selected() != "keycard":
 		if inventory.has("keycard"):
@@ -776,7 +816,7 @@ func use_room_door() -> void:
 	if entrance_collision:
 		entrance_collision.collision_layer = 0
 		entrance_collision.collision_mask = 0
-	create_tween().tween_property(entrance_door, "rotation:y", -1.35, .9).set_trans(Tween.TRANS_SINE)
+	set_entrance_door_open(true, .9)
 	hud.show_message("Замок мигнул зелёным. Карта осталась в прорези.", 3.4)
 	hints.set_focus(Vector3(-2.65, 1.20, -2.60), [
 		"Дверь открыта.",
@@ -791,10 +831,7 @@ func enter_room() -> void:
 	var mark := epoch
 	# Дверь закрывается за спиной сама. Это единственный момент круга, где
 	# комната действует раньше игрока.
-	create_tween().tween_property(entrance_door, "rotation:y", 0.0, .55).set_trans(Tween.TRANS_SINE)
-	if entrance_collision:
-		entrance_collision.collision_layer = 1
-		entrance_collision.collision_mask = 1
+	set_entrance_door_open(false, .55)
 	cue.play("latch")
 	hud.show_message("Дверь закрылась за спиной.", 2.8)
 	set_intro_hints()
@@ -953,8 +990,8 @@ func open_container(id: String) -> void:
 				announce_pickup("bill", "Счёт из минибара — в карман.")
 	containers.erase(id)
 
-func toggle_extra_lamp(index: int) -> void:
-	if index >= extra_lamps.size():
+func toggle_extra_lamp(index: int, id: String = "") -> void:
+	if index < 0 or index >= extra_lamps.size():
 		return
 	var lamp: Dictionary = extra_lamps[index]
 	var light: OmniLight3D = lamp["light"]
@@ -962,12 +999,20 @@ func toggle_extra_lamp(index: int) -> void:
 	light.visible = turn_on
 	for mesh in lamp["meshes"]:
 		mesh.material_override = null if turn_on else lamp_off_material
+	cue.play("switch")
+	hud.show_message("Щелчок. Лампа %s." % ("зажглась" if turn_on else "погасла"), 2.2)
+	var target_id := id if not id.is_empty() else ("entry_lamp" if index == 0 else "desk_lamp")
+	interactor.set_text(target_id, "Лампа с выключателем. Сейчас %s." % ("включена" if turn_on else "выключена"))
 	reward("lamp%d" % index)
 	evaluate_darkness()
 
 func use_door() -> void:
 	if act == Act.LEAVING:
 		open_exit()
+		return
+	if act != Act.PROLOGUE:
+		set_entrance_door_open(not door_open)
+		hud.show_message("Дверь открыта." if door_open else "Дверь закрыта.", 2.2)
 		return
 	door_attempts += 1
 	cue.play("locked")
@@ -979,6 +1024,14 @@ func use_peephole() -> void:
 	if tasks_done.get("peephole", false):
 		hud.show_message("В глазке темно. Коридора, по которому ты пришёл, там больше нет." if broken else "Коридора нет.", 3.4)
 		return
+	# Одного взгляда достаточно: повторные осмотры больше не требуются для
+	# продвижения задачи.
+	peephole_stage = 1
+	hud.show_message("В глазке — эта же комната. У окна что-то только что промелькнуло.", 4.0)
+	cue.play("breath", -2.0)
+	learn_digit("4")
+	complete_task("peephole")
+	return
 	peephole_stage += 1
 	match peephole_stage:
 		1:
@@ -1055,6 +1108,8 @@ func use_wardrobe() -> void:
 	var tween := create_tween()
 	tween.tween_property(wardrobe_door, "rotation:y", -1.2, .8).set_trans(Tween.TRANS_SINE)
 	safe_prop.visible = true
+	safe_light.light_energy = 0.0
+	create_tween().tween_property(safe_light, "light_energy", .72, .5).set_delay(.18)
 	# Открытый шкаф перестаёт быть глухим ящиком: снимаем и зону шкафа, и его
 	# физическую коробку — иначе сейф внутри не навести ни лучом, ни взглядом.
 	interactor.zone("wardrobe").collision_layer = 0
@@ -1211,6 +1266,7 @@ func toggle_bedside(index: int) -> void:
 	for mesh in bed_lamp_meshes[index]:
 		mesh.material_override = null if turn_on else lamp_off_material
 	cue.play("switch")
+	hud.show_message("Щелчок. Прикроватная лампа %s." % ("зажглась" if turn_on else "погасла"), 2.2)
 	evaluate_darkness()
 
 func toggle_switch(id: String) -> void:
@@ -1222,6 +1278,28 @@ func toggle_switch(id: String) -> void:
 			light.light_energy = room_light_energy[index] if turn_on else 0.0
 	cue.play("switch")
 	evaluate_darkness()
+	show_switch_progress(id,turn_on)
+
+func show_switch_progress(id: String, turn_on: bool) -> void:
+	if act != Act.WATCHING or tasks_done.get('dark',false):
+		return
+	var off_count := 0
+	for value in switch_on.values():
+		if not bool(value):
+			off_count += 1
+	var room_names := {
+		'switch_hall':'Прихожая',
+		'switch_bedroom':'Спальня',
+		'switch_bathroom':'Ванная',
+		'switch_living':'Гостиная'
+	}
+	var room: String = room_names.get(id,'Комната')
+	if turn_on:
+		hud.show_message('%s: свет снова включён. Настенные выключатели: %d из 4.' % [room,off_count],2.8)
+	elif off_count < 4:
+		hud.show_message('%s: свет выключен. Настенные выключатели: %d из 4.\nКарта M отмечает остальные знаками света.' % [room,off_count],3.4)
+	else:
+		hud.show_message('Все четыре настенных выключателя погашены.\nОстались четыре отдельные лампы.',3.4)
 
 # Темнота — не выключатель сюжета, а состояние комнаты. Следы проступают и
 # исчезают ровно столько раз, сколько игрок гасит и зажигает свет.
@@ -1246,6 +1324,12 @@ func evaluate_darkness() -> void:
 		else "Обои в мелкую полоску. Ничего.")
 	if dark:
 		cue.play("breath", -6.0)
+		if act == Act.WATCHING and not tasks_done.get("dark", false):
+			hud.show_message("Свет погас. Подойди к стене у кровати и нажми E.", 3.6)
+			hints.set_focus(Vector3(2.25, 1.45, -2.10), [
+				"На стене у кровати проступили буквы.",
+				"Свет погас. Теперь рассмотри след над изголовьем.",
+				"Спальня: наведи прицел на надпись и нажми E."], lights_of("switch_bedroom"))
 		interactor.set_text("mirror", "В темноте стекло отдаёт слабым светом. На нём проступила цифра: 4")
 	elif not mirror_fogged:
 		interactor.set_text("mirror", "Ты видишь в нём комнату. И себя — с небольшим опозданием.")
@@ -1296,8 +1380,8 @@ func update_focus() -> void:
 	elif not tasks_done.get("peephole", false):
 		hints.set_focus(Vector3(-2.65, 1.58, -2.88), [
 			"От двери тянет холодом.",
-			"В двери есть глазок. В него стоит посмотреть не один раз.",
-			"Прихожая: наведись на глазок над ручкой и нажми E трижды."],
+			"В двери есть глазок. Одного взгляда достаточно.",
+			"Прихожая: наведи прицел на глазок над ручкой и нажми E один раз."],
 			lights_of("switch_hall"))
 	elif not tasks_done.get("dark", false):
 		hints.set_focus(Vector3(-2.05, 1.18, -2.52), [
@@ -1307,6 +1391,15 @@ func update_focus() -> void:
 			lights_of("switch_hall"))
 	else:
 		hints.clear_focus()
+
+	# Once the darkness task becomes current, make the final hint name useful
+	# landmarks and point to the in-game map instead of only repeating a count.
+	if tasks_done.get('water',false) and tasks_done.get('safe',false) and tasks_done.get('peephole',false) and not tasks_done.get('dark',false):
+		hints.set_focus(Vector3(-2.05,1.18,-2.52),[
+			'Свет мешает увидеть то, что прячется на стенах.',
+			'Погаси четыре настенных выключателя и четыре отдельные лампы.',
+			'Выключатели стоят у проходов: в прихожей возле входа, в спальне и ванной по сторонам коридора, в гостиной справа от прохода. Нажми M: четыре знака света отмечают их на карте.'],
+			lights_of('switch_hall'))
 
 func lights_of(switch_id: String) -> Array:
 	var group = switch_groups.get(switch_id, [])
@@ -1508,10 +1601,7 @@ func open_exit() -> void:
 		hall.visible = false
 	for detail in entrance_details:
 		detail.visible = false
-	if entrance_collision:
-		entrance_collision.collision_layer = 0
-		entrance_collision.collision_mask = 0
-	create_tween().tween_property(entrance_door, "rotation:y", -1.35, 1.1).set_trans(Tween.TRANS_SINE)
+	set_entrance_door_open(true, 1.1)
 	await get_tree().create_timer(1.2).timeout
 	if mark != epoch:
 		return
@@ -1605,11 +1695,15 @@ func full_reset() -> void:
 	wardrobe_proxy.visible = false
 	wardrobe_model.visible = true
 	safe_prop.visible = false
+	safe_light.light_energy = 0.0
 	key_prop.visible = false
 	note_prop.visible = false
 	pillow_prop.transform = original.pillow
 	entrance_door.transform = original.door
 	door_handle_lever.transform = original.door_lever
+	set_entrance_door_open(false, 0.0)
+	for detail in entrance_details:
+		detail.visible = true
 	curtain_left.transform = original.curtain_left
 	curtain_right.transform = original.curtain_right
 	player.transform = original.player
@@ -1693,6 +1787,7 @@ func full_reset() -> void:
 	inventory.add("keycard", "карта-ключ", card_prop,
 		"Пластиковая карта-ключ в бумажном конверте.",
 		"На конверте вписано от руки: 1604 · выезд 16:05")
+	inventory.deselect()
 	hints.set_focus(Vector3(-2.65, 1.20, -3.42), [
 		"Твой номер где-то на этом этаже.",
 		"Номер 1604. Табличка висит рядом с дверью.",
@@ -1755,8 +1850,8 @@ func reach_origins() -> Dictionary:
 		"tv": Vector3(-.45, 1.45, 3.15), "curtains": Vector3(.8, 1.55, 4.35),
 		"lamp_left": Vector3(0, 1.45, -1.75), "lamp_right": Vector3(2.37, 1.45, -1.75),
 		"wall_trace": Vector3(2.25, 1.45, -2.10), "switch_hall": Vector3(-2.05, 1.45, -1.82),
-		"switch_bedroom": Vector3(-.95, 1.45, -1.45), "switch_bathroom": Vector3(-2.75, 1.45, .25),
-		"switch_living": Vector3(3.35, 1.45, 1.05),
+		"switch_bedroom": Vector3(-.95, 1.45, -1.15), "switch_bathroom": Vector3(-2.75, 1.45, .25),
+		"switch_living": Vector3(.18, 1.45, 1.55),
 		# обстановка
 		"console": Vector3(-3.40, 1.30, -1.72), "entry_lamp": Vector3(-3.45, 1.30, -1.92),
 		"hall_plant": Vector3(-3.45, 1.30, -1.52), "hall_painting": Vector3(-3.40, 1.80, -1.72),
@@ -1787,6 +1882,42 @@ func reach_origins() -> Dictionary:
 	}
 	return origins
 
+# В первом круге темнота — обязательная задача, поэтому недостаточно проверить
+# только итоговое состояние. Каждый из четырёх настенных выключателей и каждая
+# из четырёх отдельных ламп должны честно пройти полный цикл и вернуться во
+# включённое состояние до сюжетного выключения всего номера.
+func audit_light_controls() -> bool:
+	var switch_ids := ["switch_hall", "switch_bedroom", "switch_bathroom", "switch_living"]
+	for switch_id in switch_ids:
+		if not require(bool(switch_on.get(switch_id, false)), "%s did not start on" % switch_id): return false
+		var controlled := lights_of(switch_id)
+		if not require(not controlled.is_empty(), "%s controls no lights" % switch_id): return false
+		toggle_switch(switch_id)
+		if not require(not bool(switch_on[switch_id]), "%s did not switch off" % switch_id): return false
+		for light: Light3D in controlled:
+			if not require(light.light_energy <= .001, "%s left a light on" % switch_id): return false
+		toggle_switch(switch_id)
+		if not require(bool(switch_on[switch_id]), "%s did not switch back on" % switch_id): return false
+		for light: Light3D in controlled:
+			if not require(light.light_energy > .001, "%s did not restore its light" % switch_id): return false
+
+	if not require(lamp_lights.size() == 2, "bedside lamp lights missing"): return false
+	if not require(extra_lamps.size() == 2, "entry or desk lamp light missing"): return false
+	for index in range(lamp_lights.size()):
+		if not require(lamp_lights[index].visible, "bedside lamp %d did not start on" % index): return false
+		toggle_bedside(index)
+		if not require(not lamp_lights[index].visible, "bedside lamp %d did not switch off" % index): return false
+		toggle_bedside(index)
+		if not require(lamp_lights[index].visible, "bedside lamp %d did not switch back on" % index): return false
+	for index in range(extra_lamps.size()):
+		var light := (extra_lamps[index] as Dictionary)["light"] as OmniLight3D
+		if not require(light.visible, "extra lamp %d did not start on" % index): return false
+		toggle_extra_lamp(index)
+		if not require(not light.visible, "extra lamp %d did not switch off" % index): return false
+		toggle_extra_lamp(index)
+		if not require(light.visible, "extra lamp %d did not switch back on" % index): return false
+	return true
+
 # Прогон всей новой цепочки без игрока. Прежний аудит проверял старый сценарий
 # шаг в шаг и после переделки не имел смысла.
 func run_audit() -> void:
@@ -1796,7 +1927,29 @@ func run_audit() -> void:
 		if not require(interactor.targets.has(id), "missing target: %s" % id): return
 	# Сейф намеренно живёт внутри шкафа: их зоны разводятся переключением слоя.
 	if not check_no_overlap([["safe", "wardrobe"]]): return
-	if not check_reachable(reach_origins()): return
+	# Сейф в начале круга закрыт коробкой шкафа (его слой снят), поэтому в общий
+	# просмотр он не входит — его наводят отдельным aim_check ниже, ровно там,
+	# где шкаф уже открыт. Это единственная зона-исключение во всех девяти кругах.
+	if not check_reachable(reach_origins(), ["safe"]): return
+	# Мёртвое [E]. Круг I разбирает больше всех: явные ветки match, тихие отклики,
+	# открываемые ящики, коридор по префиксу и пятёрка третьего акта.
+	var bound := ["door", "peephole", "clock", "faucet", "mirror", "wardrobe", "safe",
+		"bed", "phone", "tv", "curtains", "bed_curtain", "lamp_left", "lamp_right",
+		"wall_trace", "entry_lamp", "desk_lamp", "toilet", "tub", "shower",
+		"coffee_machine", "writing_set", "books", "coffee_service", "hall_painting"]
+	bound += QUIET_USE.keys()
+	bound += containers.keys()
+	bound += RESTORE_IDS
+	for id in interactor.targets:
+		if str(id).begins_with("corr_"):
+			bound.append(str(id))
+	if not check_actions_bound(bound): return
+	if not require(entrance_details.size() == 3, "door details missing"): return
+	for detail in entrance_details:
+		if not require(detail.get_parent() == entrance_door, "%s is not attached to the door" % detail.name): return
+	if not require(entrance_collision.get_parent() == entrance_door, "door collision is not attached to the door"): return
+	var bedroom_ceiling := get_parent().find_child("BedroomCeiling", true, false) as OmniLight3D
+	if not require(bedroom_ceiling and bedroom_ceiling.light_energy >= .40, "bedroom ceiling light is too dim"): return
 
 	# Пролог: игрок в коридоре и входит в номер сам. Аудит обязан идти тем же
 	# путём, каким идёт живой игрок, — иначе первый акт отработает не в том
@@ -1805,10 +1958,11 @@ func run_audit() -> void:
 	if not require(inventory.has("keycard"), "keycard was not issued"): return
 	# Карта единственная, поэтому add() выбирает её сама: первый глагол игрок
 	# делает одной клавишей E, а не разгадывает слоты на пустом месте.
-	if not require(inventory.selected() == "keycard", "keycard is not in hand at spawn"): return
+	if not require(inventory.selected().is_empty(), "keycard is unexpectedly in hand at spawn"): return
 	await shot("prologue_lift", Vector3(-.2, .05, -4.62), -PI / 2, .16)
 	await shot("prologue_corridor", CORRIDOR_SPAWN, CORRIDOR_YAW, 0.0)
 	if not require(current_goal().contains("1604"), "H says nothing useful in the prologue"): return
+	inventory.select_by_id("keycard")
 	use_room_door()
 	if not require(door_unlocked, "keycard did not open room 1604"): return
 	if not require(not inventory.has("keycard"), "keycard stayed in the inventory"): return
@@ -1912,6 +2066,7 @@ func run_audit() -> void:
 	open_container("drawer_right")
 	open_container("minibar")
 	if not require(inventory.has("matchbox") and inventory.has("bill"), "container items not taken"): return
+	if not audit_light_controls(): return
 	for switch_id in ["switch_hall", "switch_bedroom", "switch_bathroom", "switch_living"]:
 		toggle_switch(switch_id)
 	toggle_bedside(0)

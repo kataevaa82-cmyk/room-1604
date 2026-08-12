@@ -85,16 +85,19 @@ const MODEL_MATERIAL_DEFAULTS := {
 var mats := {}
 var shell_node: Shell
 
+# Web exports are single-threaded on hosts without COOP/COEP.  Keep the 3D
+# buffer at or below 896x504 while CanvasLayer UI stays at native resolution.
+# This also prevents a 1440p/4K browser window from multiplying fragment work.
+const WEB_3D_PIXEL_BUDGET := 896.0 * 504.0
+
 func _ready() -> void:
 	# Проверка прогресса идёт до сборки комнаты: ей комната не нужна, а сборка
 	# занимает секунды.
 	if OS.has_environment("FLOW_AUDIT"):
 		run_flow_audit()
 		return
-	# До сборки круга: решает, какой круг строить и показывать ли меню поверх
-	# него. Комната собирается процедурно и целиком, поэтому построить первый
-	# круг, а потом по «Продолжить» перезагрузиться в седьмой — значит собрать
-	# всю комнату дважды подряд.
+	# Выбор круга сделан в отдельной лёгкой сцене menu.tscn. Здесь остаётся
+	# служебная подготовка прямых запусков main.tscn и режимов аудита.
 	Game.prepare_boot()
 	make_materials()
 	build_environment()
@@ -111,6 +114,7 @@ func _ready() -> void:
 	# room_lights, и бра коридора иначе попали бы и в выключатели номера, и в
 	# задачу «погасить всё».
 	build_corridor()
+	apply_runtime_quality()
 	if OS.has_environment("ROOM1408_MODEL_AUDIT"):
 		for model_root in get_tree().get_nodes_in_group("downloaded_models"):
 			print("MODEL_PLACEMENT %s %s" % [model_root.get_path(), visual_bounds(model_root)])
@@ -235,6 +239,7 @@ func shell_shot()->void:
 		"circles":func()->void: shell_node.show_circle_list(),
 		"controls":func()->void: shell_node.show_controls(),
 		"pause":func()->void: shell_node.show_pause(),
+		"map":func()->void: shell_node.show_map(),
 		"transition":func()->void:
 			shell_node.finished_circle=3
 			shell_node.pending_circle=4
@@ -281,6 +286,9 @@ func mat(key:String, color:Color, rough:=0.72, metallic:=0.0, emission:=Color(0,
 	mats[key]=m; return m
 
 func make_materials() -> void:
+	# Painted plaster keeps the ceiling trim readable instead of turning it
+	# into the thick black beam produced by the furniture-wood palette.
+	mat('crown',Color('c8bda8'),0.84,0.0,Color('241f19')); mat('crown_accent',Color('aa8752'),0.48,0.18)
 	mat("wall",Color("a18f74")); mat("wood",Color("29170f"),0.48); mat("wood2",Color("4a2a18"),0.5)
 	mat("carpet",Color("665443"),0.95); mat("beige",Color("aa9277"),0.9); mat("cream",Color("d1c3a8"),0.82)
 	mat("olive",Color("4c5031"),0.92); mat("brass",Color("7b5527"),0.34,0.65); mat("metal",Color("252422"),0.38,0.72); mat("chrome",Color("b8b9b6"),0.24,0.45)
@@ -721,6 +729,10 @@ func build_lights()->void:
 	# тёплый остров вместо равномерного потолочного пересвета, а лунная заливка
 	# отделяет тёмное дерево и шторы по краям.
 	var l:=group("Lights",get_node("HotelSuite")); add_light(l,"BedroomAmber",Vector3(1.25,1.35,-2.48),Color("f2bc7d"),.40,3.35,true); add_light(l,"LivingAmber",Vector3(.9,1.95,3.7),Color("efb876"),.50,4.7,true); add_light(l,"HallAmber",Vector3(-3.0,1.85,-2.0),Color("e7b879"),.31,2.65,false); add_light(l,"BathroomSconce",Vector3(-3.92,1.82,-.40),Color("efd2a4"),.42,2.8,true)
+	# The visible ceiling fixtures also need their own pools of light. Previously
+	# the switch changed only the room fill, so the bedroom chandelier appeared
+	# unchanged even though the interaction state toggled.
+	add_light(l,"HallCeiling",Vector3(-3.05,2.18,-2.05),Color("f2c486"),.18,2.45,false); add_light(l,"BedroomCeiling",Vector3(1.2,2.18,-1.3),Color("f4c98d"),.62,3.4,true); add_light(l,"BathroomCeiling",Vector3(-3.25,2.18,1.0),Color("ead8b8"),.18,2.35,false); add_light(l,"LivingCeiling",Vector3(.8,2.18,3.7),Color("f0c181"),.22,2.8,false)
 	# Мягкая заливка гостиной перенесена от уже светлой восточной стены к ТВ и
 	# дивану: она проявляет древесную фактуру и ковёр, не включая сам экран.
 	add_light(l,"LivingSoftFill",Vector3(-.25,1.30,3.10),Color("d6b68e"),.21,3.45,false); add_light(l,"BathroomSoftFill",Vector3(-2.45,1.65,1.9),Color("ddd4c4"),.2,2.7,false)
@@ -732,6 +744,7 @@ func build_finishing_details()->void:
 	var suite:=get_node("HotelSuite"); var p:=group("Props",suite)
 	# One Blender mesh contains four exact continuous loops with true mitered corners.
 	var suite_crown:=placed_model(p,"SuiteCrownMolding",SUITE_CROWN_MOLDING_MODEL,Vector3.ZERO,Vector3.ZERO,{"wood":"wood2","brass":"brass"})
+	apply_model_palette(suite_crown,{'wood':'crown','brass':'crown_accent'})
 	# Thin stepped faces near the ceiling do not cast useful shadows and otherwise create shadow-map combing at grazing angles.
 	for crown_mesh in suite_crown.find_children("*","MeshInstance3D",true,false):
 		var crown_instance:=crown_mesh as MeshInstance3D
@@ -779,8 +792,8 @@ func build_finishing_details()->void:
 	var east_cool:=[Vector3(7.67,.70,-1.85),Vector3(7.64,1.58,-1.02),Vector3(7.68,.78,.42)]
 	multi_box(city,"EastWarmWindows",east_warm,Vector3(.025,.10,.13),"window_warm"); multi_box(city,"EastCoolWindows",east_cool,Vector3(.025,.08,.11),"window_cool")
 	# Switches and outlets anchor the scale throughout the suite.
-	var switch_positions:=[Vector3(-1.86,1.2,-1.45),Vector3(-1.86,1.2,.25),Vector3(4.28,1.2,1.05)]
-	for i in range(switch_positions.size()): wall_switch(p,"WallSwitch%d" % i,switch_positions[i],-PI/2 if i==2 else PI/2)
+	var switch_positions:=[Vector3(-1.86,1.2,-1.15),Vector3(-1.86,1.2,.25),Vector3(.18,1.2,.84)]
+	for i in range(switch_positions.size()): wall_switch(p,"WallSwitch%d" % i,switch_positions[i],0.0 if i==2 else PI/2)
 
 func build_player()->void:
 	var p:=CharacterBody3D.new(); p.name="Player"; p.position=Vector3(1.25,.05,.15)
@@ -886,6 +899,11 @@ func build_corridor()->void:
 		door_plate(c,number,Vector3(x,1.75,-5.86),1.0)
 	# Табличка 1604 со стороны коридора: та, что в номере, смотрит внутрь.
 	door_plate(c,"1604",Vector3(-1.95,1.75,-3.30),-1.0)
+	# Transom above entrance 1604: glass panel and frame.
+	box(c,"EntranceDoorTransomGlass",Vector3(-1.95,2.28,-3.36),Vector3(1.42,.34,.035),"glass")
+	box(c,"EntranceDoorTransomTop",Vector3(-1.95,2.47,-3.36),Vector3(1.50,.055,.08),"wood2")
+	box(c,"EntranceDoorTransomLeft",Vector3(-2.67,2.28,-3.36),Vector3(.055,.40,.08),"wood2")
+	box(c,"EntranceDoorTransomRight",Vector3(-1.23,2.28,-3.36),Vector3(.055,.40,.08),"wood2")
 
 	for i in range(4):
 		var x:=-5.4+i*2.9
@@ -1113,14 +1131,50 @@ func build_shell(circle:int,level:Node)->void:
 		var touch:=TouchControls.new()
 		add_child(touch)
 		touch.setup(get_node("Player") as CharacterBody3D,shell)
-		apply_touch_quality()
 	# Обязательный вызов площадки: комната собрана, экран показан, играть можно.
 	# Раньше этого места звать нельзя — Яндекс по нему считает готовность.
 	if has_node("/root/Platform"):
 		get_node("/root/Platform").report_ready()
 
-# Настройки под слабое железо. Включаются вместе с сенсорным управлением,
-# потому что телефон — единственное место, где они нужны.
+# Выбирается после сборки комнаты и коридора, чтобы настройка затронула каждый
+# источник света. WebGL-профиль нужен и настольным браузерам: web-сборка без
+# потоков заметно медленнее нативной даже на ноутбуке с мышью.
+func apply_runtime_quality()->void:
+	if OS.has_feature("web") and not Engine.is_editor_hint():
+		apply_web_quality()
+	elif TouchControls.wanted():
+		apply_touch_quality()
+
+# Браузерный профиль: интерфейс остаётся чётким, уменьшается только 3D-буфер.
+# Тени от OmniLight3D особенно дороги в Compatibility/WebGL и почти незаметны
+# в движении при текущем мягком свете, поэтому в вебе они отключены полностью.
+func apply_web_quality()->void:
+	var viewport:=get_viewport()
+	viewport.scaling_3d_mode=Viewport.SCALING_3D_MODE_BILINEAR
+	update_web_3d_scale()
+	if not viewport.size_changed.is_connected(update_web_3d_scale):
+		viewport.size_changed.connect(update_web_3d_scale)
+	var shadowed:=disable_runtime_shadows()
+	print("WEB_QUALITY 3d_scale=%.3f shadows_off=%d"%[viewport.scaling_3d_scale,shadowed])
+
+func update_web_3d_scale()->void:
+	var viewport:=get_viewport()
+	var size:=viewport.get_visible_rect().size
+	if size.x<=0.0 or size.y<=0.0:
+		return
+	var scale:=sqrt(WEB_3D_PIXEL_BUDGET/(size.x*size.y))
+	viewport.scaling_3d_scale=clampf(scale,.35,.75)
+
+func disable_runtime_shadows()->int:
+	var shadowed:=0
+	for light in find_children("*","Light3D",true,false):
+		var source:=light as Light3D
+		if source.shadow_enabled:
+			source.shadow_enabled=false
+			shadowed+=1
+	return shadowed
+
+# Настройки под слабое нативное сенсорное устройство.
 #
 # Комната освещена девятнадцатью источниками, и в gl_compatibility тени от них
 # — самое дорогое, что здесь есть. Гасим тени и рисуем 3D в три четверти
@@ -1130,14 +1184,7 @@ func apply_touch_quality()->void:
 	var viewport:=get_viewport()
 	viewport.scaling_3d_mode=Viewport.SCALING_3D_MODE_BILINEAR
 	viewport.scaling_3d_scale=0.75
-	# Комната и уровень целиком лежат под Main, поэтому одного прохода отсюда
-	# достаточно: свет, добавленный кругом, тоже попадает.
-	var shadowed:=0
-	for light in find_children("*","Light3D",true,false):
-		var source:=light as Light3D
-		if source.shadow_enabled:
-			source.shadow_enabled=false
-			shadowed+=1
+	var shadowed:=disable_runtime_shadows()
 	print("TOUCH_QUALITY 3d_scale=0.75 shadows_off=%d"%shadowed)
 
 func run_navigation_audit()->void:

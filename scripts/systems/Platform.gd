@@ -35,6 +35,7 @@ var _poll_time := 0.0
 var _waited := 0.0
 var _polling := false
 var _gameplay_running := false
+var _ready_requested := false
 
 func _ready() -> void:
 	name = "Platform"
@@ -182,10 +183,13 @@ func finish_init() -> void:
 	else:
 		is_mobile = js("window.R1604 ? window.R1604.isMobile() : false") == true
 	ready_changed.emit(available)
+	if _ready_requested and available:
+		js("window.R1604.ready()")
 
 # Сообщить площадке, что в игру можно играть. Требование обязательное:
 # по этому вызову Яндекс считает метрику готовности.
 func report_ready() -> void:
+	_ready_requested = true
 	if available:
 		js("window.R1604.ready()")
 

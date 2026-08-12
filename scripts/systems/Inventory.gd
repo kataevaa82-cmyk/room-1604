@@ -105,6 +105,13 @@ func select(index: int) -> void:
 	refresh()
 	selection_changed.emit(selected())
 
+func deselect() -> void:
+	if selected_index < 0:
+		return
+	selected_index = -1
+	refresh()
+	selection_changed.emit("")
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.is_pressed() or event.is_echo():
 		return

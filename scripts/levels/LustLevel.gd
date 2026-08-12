@@ -772,6 +772,7 @@ func run_audit() -> void:
 	# дёргающий функции уровня напрямую, поломок наведения не видит вовсе.
 	if not check_no_overlap(): return
 	if not check_reachable(reach_origins()): return
+	if not check_actions_bound(SOURCE_IDS + ["c2_suitcase", "c2_letters"]): return
 	if not require(message_on_screen(), "message sits off screen"): return
 
 	# Вещи Круга I должны исчезнуть вместе со своими зонами.

@@ -2,6 +2,7 @@
 param(
     [string]$GodotPath = "",
     [string]$OutputPath = "build/Room1604_Limbo.exe",
+    [switch]$SkipExport,
     [switch]$ReproducibilityCheck
 )
 
@@ -148,9 +149,20 @@ function Invoke-LimboAudit {
     Write-Host ("Audit {0}: OK" -f $Label)
 }
 
-Invoke-LimboExport -TargetExe $releaseExe
+if ($SkipExport) {
+    $releasePck = [IO.Path]::ChangeExtension($releaseExe, ".pck")
+    if (-not (Test-Path -LiteralPath $releaseExe) -or -not (Test-Path -LiteralPath $releasePck)) {
+        throw "SkipExport requires an existing EXE and PCK at '$releaseExe'."
+    }
+    Write-Host "Using existing release: $releaseExe"
+} else {
+    Invoke-LimboExport -TargetExe $releaseExe
+}
 
 if ($ReproducibilityCheck) {
+    if ($SkipExport) {
+        throw "ReproducibilityCheck cannot be combined with SkipExport."
+    }
     $firstExeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseExe).Hash
     $releasePck = [IO.Path]::ChangeExtension($releaseExe, ".pck")
     $firstPckHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $releasePck).Hash

@@ -101,6 +101,10 @@ func cache_room() -> void:
 	for detail_name in ["Peephole", "RoomNumberPlate", "RoomNumber1604"]:
 		var detail := root.find_child(detail_name, true, false) as Node3D
 		if detail:
+			# The peephole and room number belong to the door leaf and must travel
+			# with it while the entrance opens and closes.
+			if detail.get_parent() != entrance_door:
+				detail.reparent(entrance_door, true)
 			entrance_details.append(detail)
 	curtain_left = root.get_node("HotelSuite/LivingRoom/CurtainLeft")
 	curtain_right = root.get_node("HotelSuite/LivingRoom/CurtainRight")
@@ -113,6 +117,10 @@ func cache_room() -> void:
 	Build.move_pivot(painting, Vector3(1.25, 1.88, -3.08))
 	Build.move_pivot(phone, Vector3(2.61, .56, -2.78))
 	Build.move_pivot(entrance_door, Vector3(-3.10, 0, -3.13))
+	# Keep the physical blocker on the same pivot as the visual door. Without
+	# this, the mesh animated but the collision stayed in the closed position.
+	if entrance_collision and entrance_collision.get_parent() != entrance_door:
+		entrance_collision.reparent(entrance_door, true)
 
 	for light in root.find_children("*", "Light3D", true, false):
 		room_lights.append(light)
@@ -120,10 +128,10 @@ func cache_room() -> void:
 	# Заливка лунного света намеренно не заведена ни на один выключатель:
 	# когда игрок гасит всё, комната становится тёмной, но проходимой.
 	var groups := {
-		"switch_hall": ["HallAmber"],
-		"switch_bedroom": ["BedroomAmber"],
-		"switch_bathroom": ["BathroomSconce"],
-		"switch_living": ["LivingAmber", "LivingSoftFill"]
+		"switch_hall": ["HallAmber", "HallCeiling"],
+		"switch_bedroom": ["BedroomAmber", "BedroomCeiling"],
+		"switch_bathroom": ["BathroomSconce", "BathroomCeiling"],
+		"switch_living": ["LivingAmber", "LivingSoftFill", "LivingCeiling"]
 	}
 	for switch_id in groups:
 		var lights: Array[Light3D] = []
@@ -140,7 +148,7 @@ func cache_room() -> void:
 	for side in ["BedsideTableLeft", "BedsideTableRight"]:
 		var lamp_root := root.get_node("HotelSuite/Bedroom/%s/BedLamp" % side)
 		bed_lamp_meshes.append(lamp_root.find_children("*", "MeshInstance3D", true, false))
-	for entry in [["EntryLamp", Vector3(-4.02, 1.02, -1.92)], ["DeskLamp", Vector3(4.02, 1.00, 1.12)]]:
+	for entry in [["EntryLamp", Vector3(-4.02, 1.20, -1.92)], ["DeskLamp", Vector3(4.02, 1.22, 1.12)]]:
 		var lamp_root := root.find_child(str(entry[0]), true, false) as Node3D
 		if not lamp_root:
 			continue
@@ -148,8 +156,8 @@ func cache_room() -> void:
 		light.name = str(entry[0]) + "GameplayLight"
 		light.position = entry[1]
 		light.light_color = Color("ffd09a")
-		light.light_energy = .34
-		light.omni_range = 2.0
+		light.light_energy = .44
+		light.omni_range = 2.2
 		light.shadow_enabled = false
 		add_child(light)
 		extra_lamps.append({"meshes": lamp_root.find_children("*", "MeshInstance3D", true, false), "light": light})
@@ -177,7 +185,7 @@ func cache_room() -> void:
 const ROOM_ZONES := {
 	"console": [Vector3(-3.92, .50, -1.72), Vector3(.40, .44, .80), "Консоль у входа",
 		"Узкий столик у двери.", "Ты провёл ладонью по столешнице. Пыли нет."],
-	"entry_lamp": [Vector3(-4.02, 1.02, -1.92), Vector3(.34, .44, .34), "Лампа в прихожей",
+	"entry_lamp": [Vector3(-4.02, 1.15, -1.92), Vector3(.40, .78, .40), "Лампа в прихожей",
 		"Латунная стойка с абажуром.", "Абажур качнулся и встал как был."],
 	"hall_plant": [Vector3(-4.00, 1.00, -1.52), Vector3(.30, .40, .30), "Растение",
 		"Мелкие плотные листья в глиняном горшке.", "Земля сухая на два пальца в глубину."],
@@ -221,8 +229,8 @@ const ROOM_ZONES := {
 		"Небольшое зеркало в латунной раме.", "Стекло чистое, отражение обычное."],
 	"living_painting": [Vector3(4.13, 1.72, 3.15), Vector3(.22, .60, 1.26), "Картина с отелем",
 		"Ночной отель, горит одно окно.", "Рама качнулась. Окно на картине осталось гореть."],
-	"desk_lamp": [Vector3(4.02, .88, 1.12), Vector3(.26, .26, .26), "Лампа на столе",
-		"Рабочая лампа с зелёным абажуром.", "Щелчок. Лампа не загорелась."],
+	"desk_lamp": [Vector3(4.02, 1.14, 1.12), Vector3(.40, .78, .40), "Лампа на столе",
+		"Рабочая лампа с зелёным абажуром.", "Цепочка выключателя звякнула."],
 	"desk_chair": [Vector3(3.28, .50, 1.55), Vector3(.46, .88, .46), "Стул",
 		"Отодвинут от письменного стола.", "Стул откатился и остановился."],
 	"radiator_living": [Vector3(.80, .42, 5.35), Vector3(1.15, .45, .22), "Радиатор в гостиной",
@@ -261,13 +269,13 @@ const ROOM_ORIGINS := {
 # клавиши перехватывает лучи к соседней мебели.
 const SWITCH_ZONES := [
 	["switch_hall", Vector3(-2.05, 1.18, -2.52), Vector3(.34, .38, .28), "Выключатель в прихожей"],
-	["switch_bedroom", Vector3(-1.72, 1.18, -1.45), Vector3(.30, .38, .34), "Выключатель в спальне"],
+	["switch_bedroom", Vector3(-1.72, 1.18, -1.15), Vector3(.30, .38, .34), "Выключатель в спальне"],
 	["switch_bathroom", Vector3(-2.03, 1.18, .25), Vector3(.28, .38, .34), "Выключатель в ванной"],
-	["switch_living", Vector3(4.08, 1.30, 1.05), Vector3(.30, .38, .34), "Выключатель в гостиной"]
+	["switch_living", Vector3(.18, 1.30, .90), Vector3(.34, .38, .28), "Выключатель в гостиной"]
 ]
 const SWITCH_ORIGINS := {
-	"switch_hall": Vector3(-2.05, 1.45, -1.82), "switch_bedroom": Vector3(-.95, 1.45, -1.45),
-	"switch_bathroom": Vector3(-2.75, 1.45, .25), "switch_living": Vector3(3.35, 1.45, 1.05)
+	"switch_hall": Vector3(-2.05, 1.45, -1.82), "switch_bedroom": Vector3(-.95, 1.45, -1.15),
+	"switch_bathroom": Vector3(-2.75, 1.45, .25), "switch_living": Vector3(.18, 1.45, 1.55)
 }
 
 # Отклики обстановки, переопределённые кругом поверх ROOM_ZONES[id][4]. Текст
@@ -313,12 +321,30 @@ func flavor_origins() -> Dictionary:
 # Тихий отклик обстановки: не затирает описание предмета, а дописывает к нему
 # то, что игрок сделал. Повторный осмотр показывает оба текста.
 func use_room_zone(id: String) -> void:
+	if id == "entry_lamp" or id == "desk_lamp":
+		toggle_extra_lamp(0 if id == "entry_lamp" else 1, id)
+		return
 	var line: String = flavor_response.get(id, str(ROOM_ZONES[id][4]))
 	hud.show_message(line, 3.0)
 	if not quiet_said.has(id):
 		quiet_said[id] = true
 		interactor.set_text(id, str(ROOM_ZONES[id][3]) + "\n" + line)
 	reward(id)
+
+func toggle_extra_lamp(index: int, id: String = "") -> void:
+	if index < 0 or index >= extra_lamps.size():
+		return
+	var lamp: Dictionary = extra_lamps[index]
+	var light := lamp["light"] as OmniLight3D
+	var turn_on := not light.visible
+	light.visible = turn_on
+	for mesh in lamp["meshes"]:
+		mesh.material_override = null if turn_on else lamp_off_material
+	cue.play("switch")
+	hud.show_message("Щелчок. Лампа %s." % ("зажглась" if turn_on else "погасла"), 2.2)
+	var target_id := id if not id.is_empty() else ("entry_lamp" if index == 0 else "desk_lamp")
+	interactor.set_text(target_id, "Лампа с выключателем. Сейчас %s." % ("включена" if turn_on else "выключена"))
+	reward(target_id)
 
 func toggle_switch(id: String) -> void:
 	var on: bool = not bool(switch_on.get(id, true))
@@ -427,8 +453,32 @@ func check_no_overlap(allowed: Array = []) -> bool:
 # сейф был закрыт физической коробкой шкафа и не открывался.
 #
 # origins — точка обзора для каждой зоны. Зона, которой нет в словаре, НЕ
-# проверяется, поэтому новую зону надо заводить сразу в двух местах.
-func check_reachable(origins: Dictionary) -> bool:
+# проверялась вовсе — и это была дыра ровно того сорта, ради которого написан
+# весь этот файл: забыть зону в reach_origins() было МОЛЧАЛИВЫМ способом
+# отключить ей проверку наведения, и аудит оставался зелёным. Поэтому теперь
+# первым делом сверяются сами списки: каждая зарегистрированная зона обязана
+# иметь точку обзора, и наоборот.
+#
+# exempt — зоны, которым точка обзора не положена осознанно (зона, которую
+# игрок не наводит руками, а уровень дёргает сам).
+func check_reachable(origins: Dictionary, exempt: Array = []) -> bool:
+	var missing: Array[String] = []
+	for id in interactor.targets:
+		if not origins.has(id) and not (str(id) in exempt):
+			missing.append(str(id))
+	if not require(missing.is_empty(),
+			"zones registered without a reach origin (%d): %s" % [missing.size(), ", ".join(missing)]):
+		return false
+	# Обратная сторона: точка обзора без зоны — это опечатка в id, из-за которой
+	# настоящая зона осталась непроверенной.
+	var orphans: Array[String] = []
+	for id in origins:
+		if not interactor.targets.has(id):
+			orphans.append(str(id))
+	if not require(orphans.is_empty(),
+			"reach origins without a zone (%d): %s" % [orphans.size(), ", ".join(orphans)]):
+		return false
+
 	# Собираем все промахи за один проход: чинить полсотни зон по одной — это
 	# полсотни пересборок.
 	var failures: Array[String] = []
@@ -468,6 +518,29 @@ func aim_probe(id: String, origin: Vector3) -> String:
 	if distance > Interactor.REACH:
 		return "%s: %.2f м, вне досягаемости" % [id, distance]
 	return ""
+
+# Мёртвое [E]: зона обещает действие (usable), а on_used() её не разбирает ни
+# одной веткой — нажатие уходит в пустоту. Проверка наведения такую поломку не
+# видит вовсе: зона прекрасно ловится лучом, просто ничего не делает.
+#
+# story — id, которые круг разбирает своими ветками. Обстановка и выключатели
+# разбираются одинаково во всех девяти кругах, поэтому они зашиты здесь и
+# кругам их перечислять не нужно.
+func check_actions_bound(story: Array) -> bool:
+	var unbound: Array[String] = []
+	for id in interactor.targets:
+		# Смотрим и на исходное значение: `usable` меняется по ходу круга
+		# (взятый поднос гасит свою зону), и проверка только текущего состояния
+		# молча пропускала бы всё, что круг успел выключить или ещё не включил.
+		if not bool(interactor.targets[id]["usable"]) \
+				and not bool(interactor.targets[id]["default_usable"]):
+			continue
+		var key := str(id)
+		if key in story or ROOM_ZONES.has(key) or key.begins_with("switch_"):
+			continue
+		unbound.append(key)
+	return require(unbound.is_empty(),
+		"usable zones with no action bound (%d): %s" % [unbound.size(), ", ".join(unbound)])
 
 # Строка сообщений обязана стоять на экране, а не за его краем: привязки Control
 # внутри CanvasLayer здесь не разрешаются, и подсказки однажды не показывались

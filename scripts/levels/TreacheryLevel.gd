@@ -314,6 +314,7 @@ func run_audit() -> void:
 		if not require(interactor.entry(str(id))["usable"], "room zone is not usable: %s" % id): return
 	if not check_no_overlap(): return
 	if not check_reachable(reach_origins()): return
+	if not check_actions_bound(FROST.keys()): return
 	if not require(message_on_screen(), "message sits off screen"): return
 	if not require(act == Act.FROZEN, "circle IX did not start in the frozen act"): return
 	if not require(current_goal().contains("холод"), "H says nothing useful in act I"): return
