@@ -99,22 +99,29 @@ func _ready() -> void:
 	# Выбор круга сделан в отдельной лёгкой сцене menu.tscn. Здесь остаётся
 	# служебная подготовка прямых запусков main.tscn и режимов аудита.
 	Game.prepare_boot()
-	make_materials()
-	build_environment()
-	build_architecture()
-	build_hallway()
-	build_bedroom()
-	build_living_room()
-	build_bathroom()
-	build_lights()
-	build_finishing_details()
-	build_player()
-	build_limbo()
+	# Сборка комнаты — самая долгая операция в игре, и в браузере она идёт в
+	# один поток: пока она не кончится, страница не отдаёт ни одного кадра.
+	# Разметка по шагам нужна, чтобы решать, что резать, по числам, а не на глаз.
+	var build_started := Time.get_ticks_msec()
+	var step_marks: Array = []
+	make_materials();          step_marks.append(["materials", Time.get_ticks_msec()])
+	build_environment();       step_marks.append(["environment", Time.get_ticks_msec()])
+	build_architecture();      step_marks.append(["architecture", Time.get_ticks_msec()])
+	build_hallway();           step_marks.append(["hallway", Time.get_ticks_msec()])
+	build_bedroom();           step_marks.append(["bedroom", Time.get_ticks_msec()])
+	build_living_room();       step_marks.append(["living_room", Time.get_ticks_msec()])
+	build_bathroom();          step_marks.append(["bathroom", Time.get_ticks_msec()])
+	build_lights();            step_marks.append(["lights", Time.get_ticks_msec()])
+	build_finishing_details(); step_marks.append(["finishing", Time.get_ticks_msec()])
+	build_player();            step_marks.append(["player", Time.get_ticks_msec()])
+	build_limbo();             step_marks.append(["limbo", Time.get_ticks_msec()])
 	# Строго после build_limbo(): cache_room() сметает все Light3D под корнем в
 	# room_lights, и бра коридора иначе попали бы и в выключатели номера, и в
 	# задачу «погасить всё».
-	build_corridor()
-	apply_runtime_quality()
+	build_corridor();          step_marks.append(["corridor", Time.get_ticks_msec()])
+	apply_runtime_quality();   step_marks.append(["quality", Time.get_ticks_msec()])
+	report_build_times(build_started, step_marks)
+	reveal_room_progressively(Time.get_ticks_msec())
 	if OS.has_environment("ROOM1408_MODEL_AUDIT"):
 		for model_root in get_tree().get_nodes_in_group("downloaded_models"):
 			print("MODEL_PLACEMENT %s %s" % [model_root.get_path(), visual_bounds(model_root)])
@@ -138,6 +145,66 @@ func _ready() -> void:
 		if shot_path=="1" or shot_path.is_empty(): shot_path="res://preview.png"
 		get_viewport().get_texture().get_image().save_png(shot_path)
 		await clean_audit_quit()
+
+# Строка на шаг, а не одна общая: общая говорит только «долго», а нужно знать,
+# какой именно шаг резать на куски и где ставить деления прогресса.
+func report_build_times(started: int, marks: Array) -> void:
+	# Смена сцены стоит дороже самой сборки, поэтому она первой строкой: это
+	# снос прошлой комнаты, загрузка main.tscn и разбор 72 preload-констант.
+	if Game.scene_change_started > 0:
+		print("BUILD_TIME scene_change %d" % [started - Game.scene_change_started])
+	var previous := started
+	for mark in marks:
+		print("BUILD_TIME %s %d" % [mark[0], int(mark[1]) - previous])
+		previous = int(mark[1])
+	print("BUILD_TIME total %d" % [previous - started])
+
+# Между концом сборки и первым показанным кадром стоят секунды: в Compatibility
+# шейдер компилируется при первой отрисовке материала, и вся комната разом даёт
+# чёрный экран без единого кадра. Открываем геометрию порциями — работа та же,
+# но между порциями страница дышит и может рисовать индикатор.
+#
+# Скрываем только то, что было видно, и возвращаем ровно это: часть узлов
+# спрятана по смыслу круга (тьма за дверью, подменные пропы), и общий
+# visible = true сломал бы прохождение.
+const REVEAL_BATCH := 12
+
+func reveal_room_progressively(build_finished: int) -> void:
+	# Лечение сугубо браузерное. На десктопе компиляция идёт в другом рендерере
+	# и незаметна, а аудиты гоняются headless — там прятать геометрию незачем,
+	# и лишние кадры ожидания только удлиняют прогон.
+	# ROOM1604_FORCE_REVEAL гоняет тот же путь headless: браузера в аудитах нет,
+	# а сломать видимость пропов (тьма за дверью, подменные предметы) прогрев
+	# может и без него. Прогон круга под этим ключом ловит ровно такую поломку.
+	if Engine.is_editor_hint() \
+			or (not OS.has_feature("web") and not OS.has_environment("ROOM1604_FORCE_REVEAL")):
+		Game.hide_loading()
+		return
+	var to_reveal: Array[Node] = []
+	for node in find_children("*", "GeometryInstance3D", true, false):
+		if (node as GeometryInstance3D).visible:
+			(node as GeometryInstance3D).visible = false
+			to_reveal.append(node)
+	var total := to_reveal.size()
+	if total == 0:
+		Game.hide_loading()
+		return
+	# Ждём process_frame, а не frame_post_draw: последний headless не наступает
+	# вовсе, и прогрев молча повисал бы, оставив комнату невидимой. Ждать шаг
+	# главного цикла надёжнее и так же разводит порции по разным кадрам.
+	await get_tree().process_frame
+	print("BUILD_TIME first_frame_empty %d" % [Time.get_ticks_msec() - build_finished])
+	var reveal_started := Time.get_ticks_msec()
+	var shown := 0
+	while shown < total:
+		var batch_end := mini(shown + REVEAL_BATCH, total)
+		while shown < batch_end:
+			(to_reveal[shown] as GeometryInstance3D).visible = true
+			shown += 1
+		Game.set_loading_progress(float(shown) / float(total))
+		await get_tree().process_frame
+	print("BUILD_TIME reveal %d over %d meshes" % [Time.get_ticks_msec() - reveal_started, total])
+	Game.hide_loading()
 
 # Проверка прогресса: сохранение, разблокировка кругов, порченые данные и
 # слияние с облаком. Всё это невидимо до того дня, когда игрок теряет пройденное,

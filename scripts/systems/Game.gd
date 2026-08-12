@@ -70,10 +70,111 @@ func go_to_circle(tree: SceneTree, circle: int) -> void:
 	circle_to_load = circle
 	remember_circle(circle)
 	tree.paused = false
+	# Засечка переживает смену сцены — только так видно, сколько стоит сама
+	# смена: снос старой комнаты, загрузка main.tscn и разбор её preload-ов.
+	# Изнутри main.gd этот кусок уже не измерить, он идёт до его _ready().
+	scene_change_started = Time.get_ticks_msec()
+	# Экран загрузки нужен только в вебе: на десктопе комната собирается за доли
+	# секунды и вспышка «ЗАГРУЗКА» была бы мусором. Кадр обязан РЕАЛЬНО дойти до
+	# экрана прежде, чем начнётся сборка, иначе игрок увидит тот же чёрный экран,
+	# что и раньше. frame_post_draw и означает «кадр показан»; заодно он выводит
+	# нас из обработки сигнала кнопки, ради которой стоял call_deferred.
+	if OS.has_feature("web") and not Engine.is_editor_hint():
+		show_loading()
+		await RenderingServer.frame_post_draw
+		tree.change_scene_to_file(GAME_SCENE)
+		return
 	# The call originates from a menu button signal. Defer it until the current
 	# GUI event has finished so the menu can be released cleanly on desktop and
 	# in the browser export alike.
 	tree.change_scene_to_file.call_deferred(GAME_SCENE)
+
+var scene_change_started := 0
+
+# ------------------------------------------------------------ экран загрузки ---
+#
+# Живёт на автозагрузке, потому что обязан пережить смену сцены: сама смена и
+# первая отрисовка комнаты и есть то время, которое надо закрыть собой. Вид
+# повторяет html-загрузчик из tools/export_web.ps1 — те же цвета и та же
+# подпись, чтобы переход с одного экрана ожидания на другой не читался.
+#
+# Слово важнее полоски: браузерная вкладка, которая несколько секунд показывает
+# чёрное, выглядит зависшей, и игрок закрывает её, не дождавшись комнаты.
+const LOADING_BACKDROP := Color(0.043, 0.039, 0.035, 1.0)
+const LOADING_TRACK := Color(0.141, 0.122, 0.094, 1.0)
+const LOADING_FILL := Color(0.910, 0.753, 0.490, 1.0)
+const LOADING_CAPTION := Color(0.624, 0.557, 0.451, 1.0)
+
+var loading_layer: CanvasLayer
+var loading_fill: ColorRect
+
+func ensure_loading_overlay() -> void:
+	if is_instance_valid(loading_layer):
+		return
+	loading_layer = CanvasLayer.new()
+	loading_layer.name = "LoadingOverlay"
+	# Поверх всего, включая HUD и экраны оболочки.
+	loading_layer.layer = 128
+	loading_layer.visible = false
+	add_child(loading_layer)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = LOADING_BACKDROP
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	# Экран непрозрачен и глушит мышь: под ним уже нет живого меню.
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	loading_layer.add_child(backdrop)
+
+	var title := Label.new()
+	title.text = "ЗАГРУЗКА"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.anchor_right = 1.0
+	title.anchor_top = 0.45
+	title.anchor_bottom = 0.45
+	title.offset_bottom = 44.0
+	title.add_theme_color_override("font_color", LOADING_FILL)
+	title.add_theme_font_size_override("font_size", 30)
+	loading_layer.add_child(title)
+
+	var track := ColorRect.new()
+	track.color = LOADING_TRACK
+	track.anchor_left = 0.31
+	track.anchor_right = 0.69
+	track.anchor_top = 0.55
+	track.anchor_bottom = 0.55
+	track.offset_bottom = 6.0
+	loading_layer.add_child(track)
+
+	loading_fill = ColorRect.new()
+	loading_fill.color = LOADING_FILL
+	loading_fill.anchor_bottom = 1.0
+	loading_fill.anchor_right = 0.0
+	track.add_child(loading_fill)
+
+	var caption := Label.new()
+	caption.text = "КОМНАТА 1604  ·  ШЕСТНАДЦАТЫЙ ЭТАЖ"
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.anchor_right = 1.0
+	caption.anchor_top = 0.62
+	caption.anchor_bottom = 0.62
+	caption.offset_bottom = 24.0
+	caption.add_theme_color_override("font_color", LOADING_CAPTION)
+	caption.add_theme_font_size_override("font_size", 13)
+	loading_layer.add_child(caption)
+
+func show_loading() -> void:
+	ensure_loading_overlay()
+	set_loading_progress(0.0)
+	loading_layer.visible = true
+
+func set_loading_progress(value: float) -> void:
+	if is_instance_valid(loading_fill):
+		loading_fill.anchor_right = clampf(value, 0.0, 1.0)
+
+func hide_loading() -> void:
+	if is_instance_valid(loading_layer):
+		loading_layer.visible = false
 
 const SAVE_PATH_DEFAULT := "user://progress.cfg"
 # Путь — переменная, а не константа, только ради проверки прогресса: она обязана

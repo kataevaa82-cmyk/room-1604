@@ -1010,12 +1010,21 @@ func use_door() -> void:
 	if act == Act.LEAVING:
 		open_exit()
 		return
+	# Дверь заперта всю середину круга. Осмотр прямо обещает, что замок
+	# «проворачивается вхолостую», а свободный тумблер позволял открыть её в
+	# любой момент и выйти из номера мимо всего прохождения круга.
 	if act != Act.PROLOGUE:
-		set_entrance_door_open(not door_open)
-		hud.show_message("Дверь открыта." if door_open else "Дверь закрыта.", 2.2)
+		cue.play("locked")
+		hud.show_message("Замок проворачивается вхолостую. Дверь не поддаётся.", 2.4)
+		rattle_door_handle()
 		return
 	door_attempts += 1
 	cue.play("locked")
+	rattle_door_handle()
+
+# Ручка дёргается и встаёт обратно — единственный отклик запертой двери. Один
+# на пролог и на середину круга, чтобы они не разъехались при следующей правке.
+func rattle_door_handle() -> void:
 	var tween := create_tween()
 	tween.tween_property(door_handle_lever, "rotation:z", -.38, .10).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(door_handle_lever, "rotation:z", 0.0, .13)
