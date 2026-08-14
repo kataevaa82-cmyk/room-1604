@@ -623,9 +623,23 @@ func build_architecture()->void:
 	wall(a,"WestWall",Vector3(-4.4,1.35,0),Vector3(.18,2.7,6.4))
 	# East exterior wall is segmented around the bedroom window instead of hiding it behind a solid collider.
 	wall(a,"EastWallNorth",Vector3(4.4,1.35,-2.55),Vector3(.18,2.7,1.3)); wall(a,"EastWallSouth",Vector3(4.4,1.35,2.675),Vector3(.18,2.7,5.95)); wall(a,"EastWallBelowWindow",Vector3(4.4,.325,-1.1),Vector3(.18,.65,1.6)); wall(a,"EastWallAboveWindow",Vector3(4.4,2.475,-1.1),Vector3(.18,.45,1.6))
-	# North exterior with a true 0.90 m entrance opening and a solid lintel above it.
-	wall(a,"NorthA",Vector3(-3.75,1.35,-3.2),Vector3(1.3,2.7,.18)); wall(a,"NorthB",Vector3(1.10,1.35,-3.2),Vector3(6.6,2.7,.18)); wall(a,"EntranceHeader",Vector3(-2.65,2.40,-3.2),Vector3(.90,.60,.18))
+	# North exterior with a true 0.90 m entrance opening. The upper part used to
+	# be one solid wall block, so the Circle II interaction pointed at a transom
+	# that could not be seen from inside the room. Keep only a structural lintel
+	# here and build the glass sash in the opening itself.
+	wall(a,"NorthA",Vector3(-3.75,1.35,-3.2),Vector3(1.3,2.7,.18)); wall(a,"NorthB",Vector3(1.10,1.35,-3.2),Vector3(6.6,2.7,.18)); wall(a,"EntranceLintel",Vector3(-2.65,2.64,-3.2),Vector3(.90,.12,.18))
 	fitted_model(a,"EntranceDoorModel",ENTRANCE_DOOR_MODEL,Vector3(-2.65,0,-3.13),Vector3(.9,2.1,.12),Vector3.ZERO,{"wood":"wood","metal":"brass"}); model_box_collision(a,"EntranceDoorCollision",Vector3(-2.65,1.05,-3.13),Vector3(.9,2.1,.12))
+	# Actual top-hung transom above the entrance. Its pivot sits on the upper rail
+	# so Circle II can visibly close and reopen it instead of changing only text.
+	box(a,"EntranceDoorTransomTop",Vector3(-2.65,2.55,-3.10),Vector3(.90,.06,.09),"wood2")
+	box(a,"EntranceDoorTransomLeft",Vector3(-3.07,2.34,-3.10),Vector3(.06,.48,.09),"wood2")
+	box(a,"EntranceDoorTransomRight",Vector3(-2.23,2.34,-3.10),Vector3(.06,.48,.09),"wood2")
+	var transom_sash:=group("EntranceDoorTransomSash",a); transom_sash.position=Vector3(-2.65,2.51,-3.08)
+	box(transom_sash,"Glass",Vector3(0,-.18,0),Vector3(.72,.27,.035),"glass")
+	box(transom_sash,"BottomRail",Vector3(0,-.34,0),Vector3(.78,.055,.07),"wood2")
+	box(transom_sash,"LeftRail",Vector3(-.375,-.18,0),Vector3(.055,.35,.07),"wood2")
+	box(transom_sash,"RightRail",Vector3(.375,-.18,0),Vector3(.055,.35,.07),"wood2")
+	box(transom_sash,"CatchSocket",Vector3(0,-.34,.055),Vector3(.16,.045,.055),"brass")
 	cyl(a,"Peephole",Vector3(-2.65,1.82,-2.995),.035,.035,"brass",Vector3(PI/2,0,0))
 	box(a,"RoomNumberPlate",Vector3(-2.65,1.45,-2.995),Vector3(.40,.17,.025),"brass")
 	var room_number:=Label3D.new(); room_number.name="RoomNumber1604"; room_number.text="1604"; room_number.font_size=48; room_number.pixel_size=.0025; room_number.modulate=Color("21140d"); room_number.position=Vector3(-2.65,1.45,-2.975); a.add_child(room_number)
@@ -966,12 +980,6 @@ func build_corridor()->void:
 		door_plate(c,number,Vector3(x,1.75,-5.86),1.0)
 	# Табличка 1604 со стороны коридора: та, что в номере, смотрит внутрь.
 	door_plate(c,"1604",Vector3(-1.95,1.75,-3.30),-1.0)
-	# Transom above entrance 1604: glass panel and frame.
-	box(c,"EntranceDoorTransomGlass",Vector3(-1.95,2.28,-3.36),Vector3(1.42,.34,.035),"glass")
-	box(c,"EntranceDoorTransomTop",Vector3(-1.95,2.47,-3.36),Vector3(1.50,.055,.08),"wood2")
-	box(c,"EntranceDoorTransomLeft",Vector3(-2.67,2.28,-3.36),Vector3(.055,.40,.08),"wood2")
-	box(c,"EntranceDoorTransomRight",Vector3(-1.23,2.28,-3.36),Vector3(.055,.40,.08),"wood2")
-
 	for i in range(4):
 		var x:=-5.4+i*2.9
 		fitted_model(c,"CorridorSconce%d"%i,WALL_LAMP_MODEL,Vector3(x,2.05,-5.83),Vector3(.26,.30,.16),Vector3.ZERO,{"metal":"brass","lamp":"lamp_glow","cream":"shade"})

@@ -546,11 +546,17 @@ func close_source(id: String) -> void:
 			hud.show_message("Шпингалет в кармане, а не в руке. Нажми %d."
 				% inventory.slot_of("catch"), 3.2)
 		else:
-			hud.show_message("Фрамугу нечем запереть: шпингалет сорван.", 3.0)
+			hud.show_message("Шпингалет сорван. Поищи его под чужим чемоданом.", 3.6)
+			hints.set_focus(Vector3(1.95, .30, -.55), [
+				"Фрамуга видна, но запереть её пока нечем.",
+				"Сорванный шпингалет должен быть где-то в комнате.",
+				"Сдвинь чужой чемодан у кровати: наведи прицел и нажми E."])
+			hints.reset_timer()
 		return
 	closed[id] = true
 	if id == "transom":
 		inventory.remove("catch")
+		set_transom_open(false)
 	interactor.set_usable(id, false)
 	interactor.set_text(id, "Закрыто. Отсюда больше не тянет.")
 	clock.advance(9.0, "source")
@@ -621,6 +627,7 @@ func release_letters() -> void:
 	released = true
 	inventory.remove("bundle")
 	closed.erase("transom")
+	set_transom_open(true)
 	interactor.set_usable("transom", false)
 	interactor.set_text("transom", "Фрамуга откинута. Писем за ней уже нет.")
 	anomalies.clear()
@@ -667,9 +674,11 @@ func current_goal() -> String:
 			for id in SOURCE_IDS:
 				if not closed.has(id):
 					left.append(str(SOURCE_NAMES[id]))
-			if left.size() == 1 and left[0] == SOURCE_NAMES["transom"] and inventory.has("catch"):
-				return "Осталась фрамуга над входной дверью. Возьми шпингалет клавишей %d и нажми E." \
-					% maxi(inventory.slot_of("catch"), 1)
+			if left.size() == 1 and left[0] == SOURCE_NAMES["transom"]:
+				if inventory.has("catch"):
+					return "Осталась фрамуга над входной дверью. Возьми шпингалет клавишей %d и нажми E." \
+						% maxi(inventory.slot_of("catch"), 1)
+				return "Осталась фрамуга над входной дверью. Шпингалет сорван — сдвинь чужой чемодан у кровати."
 			return "Ветер не даёт ничего сделать. Закрой источники сквозняка — осталось %d: %s." \
 				% [left.size(), ", ".join(left)]
 		Act.LETTERS:
@@ -715,6 +724,8 @@ func full_reset() -> void:
 	player.global_position = Vector3(1.25, .05, .15)
 	player.velocity = Vector3.ZERO
 	player.set_physics_process(true)
+	lock_entrance_door()
+	set_transom_open(true, 0.0)
 	hide_circle_one_things()
 	calm_curtains()
 	interactor.clear()
@@ -738,6 +749,18 @@ func full_reset() -> void:
 		scatter_letters(true)
 	hints.set_enabled(true)
 	focus_next_source()
+
+# The sash is a real part of the shared doorway, not only an interaction zone.
+# Open means its lower edge is tilted into the room; closed returns it flush.
+func set_transom_open(open: bool, duration: float = .45) -> void:
+	if not entrance_transom:
+		return
+	var target := -.42 if open else 0.0
+	if duration <= 0.0:
+		entrance_transom.rotation.x = target
+	else:
+		create_tween().tween_property(entrance_transom, "rotation:x", target, duration) \
+			.set_trans(Tween.TRANS_SINE)
 
 # Убрать из номера часть обстановки Круга I. Зона гасится вместе с предметом:
 # иначе прицел золотится над пустым местом, а check_reachable() падает на зоне,
@@ -768,6 +791,9 @@ func run_audit() -> void:
 				"room zone promises [E]: %s" % id): return
 	for id in SOURCE_IDS:
 		if not require(interactor.targets.has(id), "missing draught source: %s" % id): return
+	if not require(entrance_transom != null, "visible entrance transom is missing"): return
+	if not require(is_equal_approx(entrance_transom.rotation.x, -.42),
+			"transom did not start visibly open"): return
 	# В кругах II–IX эти две проверки велено гонять с самой первой зоны: аудит,
 	# дёргающий функции уровня напрямую, поломок наведения не видит вовсе.
 	if not check_no_overlap(): return
@@ -813,6 +839,7 @@ func run_audit() -> void:
 	on_used("transom")
 	if not require(not closed.has("transom"), "transom closed without the catch"): return
 	if not require(current_goal().contains("сквозняка"), "H lost the goal at the transom"): return
+	await shot("c2_transom_open", Vector3(-2.65, .05, -1.55), 0.0, -.30)
 
 	# Шпингалет лежит под чемоданом и до этого невидим.
 	if not require(not catch_prop.visible, "window catch was visible before the suitcase"): return
@@ -838,6 +865,10 @@ func run_audit() -> void:
 	if not require(closed.has("transom"), "transom did not close with the catch"): return
 	if not require(not inventory.has("catch"), "catch stayed in the inventory"): return
 	if not require(act == Act.LETTERS, "closing all four sources did not calm the room"): return
+	await get_tree().create_timer(.5).timeout
+	if not require(is_zero_approx(entrance_transom.rotation.x),
+			"transom sash did not visibly close"): return
+	await shot("c2_transom_closed", Vector3(-2.65, .05, -1.55), 0.0, -.30)
 	# Улёгшиеся шторы обязаны вернуться точно на место, а не «примерно».
 	if not require(curtain_left.transform.is_equal_approx(original.curtain_left),
 			"curtains did not settle back"): return
@@ -909,6 +940,9 @@ func run_audit() -> void:
 	on_used("transom")
 	if not require(released, "the transom did not release the letters"): return
 	if not require(not inventory.has("bundle"), "the bundle stayed in the inventory"): return
+	await get_tree().create_timer(.5).timeout
+	if not require(is_equal_approx(entrance_transom.rotation.x, -.42),
+			"transom sash did not visibly reopen"): return
 	if not require(anomalies.applied_count(HOLD_ANOMALIES) == 0,
 			"act III anomalies survived the release"): return
 	# Сообщение обещает, что ветер забрал всё: пол обязан очиститься.

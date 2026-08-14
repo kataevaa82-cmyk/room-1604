@@ -57,6 +57,7 @@ var wardrobe_model: Node3D
 var wardrobe_collision: StaticBody3D
 var entrance_door: Node3D
 var entrance_collision: StaticBody3D
+var entrance_transom: Node3D
 var entrance_details: Array[Node3D] = []
 var curtain_left: Node3D
 var curtain_right: Node3D
@@ -98,6 +99,7 @@ func cache_room() -> void:
 	wardrobe_collision = root.find_child("WardrobeCollision", true, false)
 	entrance_door = root.find_child("EntranceDoorModel", true, false)
 	entrance_collision = root.find_child("EntranceDoorCollision", true, false)
+	entrance_transom = root.find_child("EntranceDoorTransomSash", true, false)
 	for detail_name in ["Peephole", "RoomNumberPlate", "RoomNumber1604"]:
 		var detail := root.find_child(detail_name, true, false) as Node3D
 		if detail:
@@ -166,9 +168,27 @@ func cache_room() -> void:
 	original.painting = painting.transform
 	original.phone = phone.transform
 	original.door = entrance_door.transform
+	if entrance_transom:
+		original.transom = entrance_transom.transform
 	original.curtain_left = curtain_left.transform
 	original.curtain_right = curtain_right.transform
 	original.player = player.transform
+	lock_entrance_door()
+
+# Every circle after the corridor prologue starts with the player already in the
+# suite. Keep the entrance leaf and its physical blocker closed on every reset;
+# Circle I opens it only through its explicit prologue/finale state changes.
+func lock_entrance_door() -> void:
+	if entrance_door and original.has("door"):
+		entrance_door.transform = original.door
+	if entrance_collision:
+		entrance_collision.collision_layer = 1
+		entrance_collision.collision_mask = 1
+
+func entrance_is_locked_closed() -> bool:
+	return entrance_door != null and original.has("door") \
+		and entrance_door.transform.is_equal_approx(original.door) \
+		and entrance_collision != null and entrance_collision.collision_layer != 0
 
 # ------------------------------------------------------------- обстановка ---
 #
@@ -527,6 +547,11 @@ func aim_probe(id: String, origin: Vector3) -> String:
 # разбираются одинаково во всех девяти кругах, поэтому они зашиты здесь и
 # кругам их перечислять не нужно.
 func check_actions_bound(story: Array) -> bool:
+	# This common audit runs in every circle. It also protects the shared room
+	# invariant: entering or resetting a circle must never leave its front door
+	# visibly open or without a collision blocker.
+	if not require(entrance_is_locked_closed(), "entrance door is not locked closed at circle start"):
+		return false
 	var unbound: Array[String] = []
 	for id in interactor.targets:
 		# Смотрим и на исходное значение: `usable` меняется по ходу круга

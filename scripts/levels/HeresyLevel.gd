@@ -290,6 +290,7 @@ func full_reset() -> void:
 	player.global_position = Vector3(1.25, .05, .15)
 	player.velocity = Vector3.ZERO
 	player.set_physics_process(true)
+	lock_entrance_door()
 	interactor.clear()
 	interactor.set_locked(false)
 	inspect.close()
