@@ -1,0 +1,37 @@
+{
+  "title": {
+    "ru": "Комната 1604",
+    "en": "Room 1604"
+  },
+  "seo_description": {
+    "ru": "Атмосферная хоррор-головоломка от первого лица: исследуйте номер, раскрывайте аномалии и пройдите девять кругов комнаты 1604.",
+    "en": "An atmospheric first-person horror puzzle: explore the hotel room, uncover its anomalies, and complete all nine circles of Room 1604."
+  },
+  "description": {
+    "ru": "Вы заселились в номер 1604, но часы остановились, дверь заперта, а знакомые вещи ведут себя неправильно. Исследуйте номер и коридор от первого лица, находите улики, рассматривайте предметы с разных сторон и решайте связанные головоломки. Девять кругов меняют комнату и её правила: ветер, следы, тайники, печати, подделки и холод складываются в одну историю. Здесь нельзя погибнуть или проиграть, но каждое верное действие приближает часы к следующей минуте. Прогресс сохраняется автоматически.",
+    "en": "You have checked into Room 1604, but the clock has stopped, the door is locked, and familiar objects behave strangely. Explore the room and hallway in first person, find clues, examine objects from every angle, and solve connected puzzles. Nine circles transform the room and its rules: wind, traces, hidden compartments, seals, fakes, and cold form a single story. You cannot die or lose, but every correct action moves the clock one minute closer to the end. Progress is saved automatically."
+  },
+  "short_description": {
+    "ru": "Девять кругов загадок в отеле, который не хочет отпускать.",
+    "en": "Nine circles of puzzles in a hotel that refuses to let you leave."
+  },
+  "how_to_play": {
+    "ru": "На компьютере используйте WASD для ходьбы, мышь для обзора и Shift для ускорения. Нажимайте E, чтобы взаимодействовать, ЛКМ — чтобы рассматривать предметы, ПКМ — чтобы вернуть предмет. Клавиши 1–4 выбирают слот инвентаря, H показывает подсказку, M открывает карту, Esc — паузу. На телефоне используйте экранный джойстик, свайпы и кнопки действий. Найдите закономерность каждого круга и переведите часы на следующую минуту.",
+    "en": "On desktop, use WASD to move, the mouse to look around, and Shift to move faster. Press E to interact, left-click to examine an item, and right-click to put it back. Keys 1–4 select an inventory slot, H shows a hint, M opens the map, and Esc pauses the game. On mobile, use the on-screen joystick, swipes, and action buttons. Discover the pattern of each circle and move the clock forward by one minute."
+  },
+  "keywords": {
+    "ru": "хоррор,головоломка,отель,комната,квест,тайна,аномалии,от первого лица",
+    "en": "horror,puzzle,hotel,room,quest,mystery,anomalies,first person"
+  },
+  "settings": {
+    "primary_language": "ru",
+    "languages": ["ru", "en"],
+    "categories_ru": ["Головоломки", "Приключения"],
+    "age_rating": "12+",
+    "orientation": "landscape",
+    "platforms": ["desktop", "mobile"],
+    "cloud_saves": true,
+    "fullscreen_ads_between_circles": true
+  }
+}
+

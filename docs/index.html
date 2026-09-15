@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ru">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<title>Комната 1604</title>
+		<style>
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body {
+	color: white;
+	background-color: black;
+	overflow: hidden;
+	touch-action: none;
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+#status, #status-splash, #status-progress {
+	position: absolute;
+	left: 0;
+	right: 0;
+}
+
+#status, #status-splash {
+	top: 0;
+	bottom: 0;
+}
+
+#status {
+	background-color: #242424;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	visibility: hidden;
+}
+
+#status-splash {
+	max-height: 100%;
+	max-width: 100%;
+	margin: auto;
+}
+
+#status-splash.show-image--false {
+	display: none;
+}
+
+#status-splash.fullsize--true {
+	height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
+
+#status-splash.use-filter--false {
+	image-rendering: pixelated;
+}
+
+#status-progress, #status-notice {
+	display: none;
+}
+
+#status-progress {
+	bottom: 10%;
+	width: 50%;
+	margin: 0 auto;
+}
+
+#status-notice {
+	background-color: #5b3943;
+	border-radius: 0.5rem;
+	border: 1px solid #9b3943;
+	color: #e0e0e0;
+	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
+	line-height: 1.3;
+	margin: 0 2rem;
+	overflow: hidden;
+	padding: 1rem;
+	text-align: center;
+	z-index: 1;
+}
+		</style>
+		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
+<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+
+	<!-- room1604:head -->
+<link rel="preload" href="index.wasm" as="fetch" type="application/wasm" crossorigin="use-credentials">
+<link rel="preload" href="index.pck" as="fetch" crossorigin="use-credentials">
+<script>
+window.__ysdk=null;window.__ysdkReady=false;window.__ysdkPaused=false;
+window.__room1604EngineStarted=false;window.__room1604Ready=false;
+function room1604SetHostPaused(value){window.__ysdkPaused=!!value;if(window.R1604){window.R1604.pausedByHost=!!value;}}
+function sdkFailed(){window.__ysdkReady=true;}
+function initSDK(){try{YaGames.init().then(function(s){
+window.__ysdk=s;
+if(s&&typeof s.on==='function'){
+s.on('game_api_pause',function(){room1604SetHostPaused(true);});
+s.on('game_api_resume',function(){room1604SetHostPaused(false);});
+}
+window.__ysdkReady=true;
+}).catch(sdkFailed);}catch(e){sdkFailed();}}
+function room1604TryHideLoader(){if(!window.__room1604EngineStarted||!window.__room1604Ready){return;}requestAnimationFrame(function(){requestAnimationFrame(function(){var el=document.getElementById('status');if(el){el.remove();}var canvas=document.getElementById('canvas');if(canvas){canvas.focus();}});});}
+function room1604EngineStarted(){window.__room1604EngineStarted=true;room1604TryHideLoader();}
+function room1604GameReady(){window.__room1604Ready=true;var label=document.getElementById('room-loader-progress');if(label){label.textContent='НОМЕР ГОТОВ · 100%';}room1604TryHideLoader();}
+</script>
+<script src="/sdk.js" async onload="initSDK()" onerror="sdkFailed()"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:#07090e;
+-webkit-user-select:none;-moz-user-select:none;user-select:none;
+-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+canvas{display:block;touch-action:none;outline:none;-webkit-touch-callout:none}
+/* room1604:loader — виден сразу, ещё до загрузки index.js. */
+#status{visibility:visible!important;z-index:20;background:
+radial-gradient(ellipse at 50% 42%,rgba(111,76,31,.24) 0,rgba(19,20,26,.96) 38%,#07090e 76%)!important}
+#status:before{content:"";position:absolute;inset:18px 22px;border:1px solid #4b3d29;border-radius:10px;pointer-events:none}
+#status-splash{display:none!important}
+#room-loader-mark{position:absolute;left:8%;right:8%;top:26%;text-align:center;font-family:'Segoe UI',Arial,sans-serif}
+#room-loader-mark span{display:block;color:#9f8e73;font-size:13px;letter-spacing:.26em;margin-bottom:18px}
+#room-loader-mark strong{display:block;color:#e8c07d;font-size:clamp(34px,6vw,62px);line-height:1.05;letter-spacing:.08em;font-weight:600;text-shadow:0 4px 24px #000}
+#room-loader-mark small{display:block;color:#9d998f;font-size:clamp(15px,2.1vw,20px);line-height:1.45;margin-top:18px}
+#status-progress{display:block;bottom:25%;width:min(460px,62%);height:6px;border:0;-webkit-appearance:none;appearance:none;background:#241f18;border-radius:3px;overflow:hidden}
+#status-progress::-webkit-progress-bar{background:#241f18}
+#status-progress::-webkit-progress-value{background:linear-gradient(90deg,#9b6e35,#e8c07d);transition:width .18s ease}
+#status-progress::-moz-progress-bar{background:linear-gradient(90deg,#9b6e35,#e8c07d)}
+#room-loader-progress{position:absolute;bottom:18%;left:0;right:0;text-align:center;color:#b5a589;font:600 12px/1.4 'Segoe UI',Arial,sans-serif;letter-spacing:.18em}
+#status-notice{max-width:520px;background:#13151c;border:1px solid #765d38;color:#ddd6c8;font:16px/1.5 'Segoe UI',Arial,sans-serif;padding:24px;box-shadow:0 20px 70px #000;z-index:30}
+#status-notice button{display:block;min-width:220px;margin:20px auto 0;padding:12px 20px;border:1px solid #c09659;border-radius:6px;background:#251d13;color:#e8c07d;font:600 16px 'Segoe UI',Arial,sans-serif;cursor:pointer}
+@media(max-height:480px){#room-loader-mark{top:18%}#room-loader-mark span{margin-bottom:10px}#room-loader-mark small{margin-top:10px}#status-progress{bottom:20%}#room-loader-progress{bottom:11%}}
+@media(prefers-reduced-motion:reduce){#status-progress::-webkit-progress-value{transition:none}}
+</style>
+</head>
+	<body>
+		<canvas id="canvas" aria-label="Игра Комната 1604"></canvas>
+
+		<noscript>Для запуска игры включите JavaScript в браузере.</noscript>
+
+		<div id="status" role="status" aria-live="polite">
+			<div id="room-loader-mark"><span>ОТЕЛЬ · 16-Й ЭТАЖ</span><strong>КОМНАТА 1604</strong><small>Номер готовит для вас кое-что особенное</small></div>
+			<progress id="status-progress" aria-label="Загрузка игры"></progress><div id="room-loader-progress">ГОТОВИМ НОМЕР · 0%</div>
+			<div id="status-notice"></div>
+		</div>
+
+		<script src="index.js"></script>
+		<script>
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":4155092,"index.wasm":39513091},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_THREADS_ENABLED = false;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const statusOverlay = document.getElementById('status');
+	const statusProgress = document.getElementById('status-progress');
+	const statusNotice = document.getElementById('status-notice');
+
+	let initializing = true;
+	let statusMode = '';
+
+	function setStatusMode(mode) {
+		if (statusMode === mode || !initializing) {
+			return;
+		}
+		if (mode === 'hidden') {
+			window.room1604EngineStarted();
+			initializing = false;
+			return;
+		}
+		statusOverlay.style.visibility = 'visible';
+		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
+		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
+		statusMode = mode;
+	}
+
+	function setStatusNotice(text) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const lines = text.split('\n');
+		lines.forEach((line) => {
+			statusNotice.appendChild(document.createTextNode(line));
+			statusNotice.appendChild(document.createElement('br'));
+		});
+	}
+
+	function displayFailureNotice(err) {
+		console.error(err);
+		setStatusNotice('Не удалось загрузить номер. Проверьте соединение и попробуйте ещё раз.');
+		const retry = document.createElement('button');
+		retry.type = 'button';
+		retry.textContent = 'Попробовать снова';
+		retry.addEventListener('click', () => window.location.reload());
+		statusNotice.appendChild(retry);
+		setStatusMode('notice');
+		initializing = false;
+	}
+
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
+			let serviceWorkerRegistrationPromise;
+			try {
+				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
+			} catch (err) {
+				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
+			}
+			// There's a chance that installing the service worker would fix the issue
+			Promise.race([
+				serviceWorkerRegistrationPromise.then((registration) => {
+					if (registration != null) {
+						return Promise.reject(new Error('Service worker already exists.'));
+					}
+					return registration;
+				}).then(() => engine.installServiceWorker()),
+				// For some reason, `getRegistration()` can stall
+				new Promise((resolve) => {
+					setTimeout(() => resolve(), 2000);
+				}),
+			]).then(() => {
+				// Reload if there was no error.
+				window.location.reload();
+			}).catch((err) => {
+				console.error('Error while registering service worker:', err);
+			});
+		} else {
+			// Display the message as usual
+			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
+			displayFailureNotice(missingMsg + missing.join('\n'));
+		}
+	} else {
+		setStatusMode('progress');
+		engine.startGame({
+			'onProgress': function (current, total) {
+				if (current > 0 && total > 0) {
+					statusProgress.value = current;
+					statusProgress.max = total;
+					const roomProgress = document.getElementById('room-loader-progress');
+					if (roomProgress) {
+						const percent = Math.min(99, Math.max(1, Math.round(current / total * 100)));
+						roomProgress.textContent = 'ГОТОВИМ НОМЕР · ' + percent + '%';
+					}
+				} else {
+					statusProgress.removeAttribute('value');
+					statusProgress.removeAttribute('max');
+				}
+			},
+		}).then(() => {
+			setStatusMode('hidden');
+		}, displayFailureNotice);
+	}
+}());
+		</script>
+	</body>
+</html>
+
